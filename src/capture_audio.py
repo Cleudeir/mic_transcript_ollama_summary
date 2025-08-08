@@ -31,20 +31,28 @@ def is_microphone_active(device_index):
 
 
 def get_microphone_list():
-    """Get only active/working microphones"""
+    """Get only active/working microphones and prevent duplicates"""
     active_mics = []
+    seen_names = set()
     all_devices = sd.query_devices()
 
     for idx, device in enumerate(all_devices):
         if device["max_input_channels"] > 0:
+            device_name = device["name"]
+
+            # Prevent duplicate microphone names
+            if device_name in seen_names:
+                continue
+            seen_names.add(device_name)
+
             # Check if it's the default input device or if it's explicitly active
             try:
                 default_input = sd.default.device[0]
                 if idx == default_input or is_microphone_active(idx):
-                    active_mics.append((idx, device["name"]))
+                    active_mics.append((idx, device_name))
             except Exception:
                 # If we can't determine, include it anyway
-                active_mics.append((idx, device["name"]))
+                active_mics.append((idx, device_name))
 
     return active_mics
 
@@ -78,6 +86,44 @@ def capture_audio(device_index, duration=20):
         return None, None
 
 
+def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_duration=5):
+    """
+    Capture audio in real-time chunks for continuous transcription
+
+    Args:
+        device_index (int): The index of the audio device
+        on_audio_chunk: Callback function to call with each audio chunk
+        stop_event: Threading event to signal when to stop recording
+        chunk_duration (int): Duration in seconds for each audio chunk
+    """
+    try:
+        samplerate = int(sd.query_devices(device_index)["default_samplerate"])
+        chunk_samples = int(chunk_duration * samplerate)
+
+        while not stop_event.is_set():
+            try:
+                # Record a chunk
+                audio_chunk = sd.rec(
+                    chunk_samples,
+                    samplerate=samplerate,
+                    channels=1,
+                    dtype="int16",
+                    device=device_index,
+                )
+                sd.wait()
+
+                # Check if we got meaningful audio (not just silence)
+                if np.max(np.abs(audio_chunk)) > 100:  # Threshold for meaningful audio
+                    on_audio_chunk(device_index, audio_chunk, samplerate)
+
+            except Exception as e:
+                print(f"Error in audio chunk from device {device_index}: {e}")
+                break
+
+    except Exception as e:
+        print(f"Error setting up real-time capture for device {device_index}: {e}")
+
+
 def capture_audio_with_callback(
     device_index, output_box, start_event, on_audio_captured
 ):
@@ -93,9 +139,11 @@ def capture_audio_with_callback(
     duration = 20  # seconds
     try:
         samplerate = int(sd.query_devices(device_index)["default_samplerate"])
-        
+
         if output_box is not None:
-            output_box.insert(tk.END, f"Ready to record from device {device_index}...\n")
+            output_box.insert(
+                tk.END, f"Ready to record from device {device_index}...\n"
+            )
             output_box.update()
 
         # Wait for all microphones to be ready
@@ -109,7 +157,9 @@ def capture_audio_with_callback(
 
         if audio is not None:
             if output_box is not None:
-                output_box.insert(tk.END, f"Audio captured from device {device_index}...\n")
+                output_box.insert(
+                    tk.END, f"Audio captured from device {device_index}...\n"
+                )
                 output_box.update()
 
             # Call the callback with the captured audio
