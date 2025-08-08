@@ -1,5 +1,11 @@
 import threading
 import tkinter as tk
+from tkinter import messagebox, ttk
+import json
+import os
+from src.capture_audio import get_microphone_list, capture_audio_with_callback
+from src.transcribe_text import transcribe_and_display
+import tkinter as tk
 from tkinter import messagebox
 from src.capture_audio import get_microphone_list, capture_audio_with_callback
 from src.transcribe_text import transcribe_and_display
@@ -11,14 +17,22 @@ class MicrophoneTranscriberGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Microphone Selector & Transcriber")
-        self.root.geometry("600x500")
+        self.root.geometry("900x700")
 
         # Initialize variables
         self.mic_vars = []
         self.mics = []
+        self.config_file = "mic_config.json"
+        
+        # Create separate text widgets for logs and transcripts
+        self.log_outputs = {}  # Dictionary to store log outputs for each device
+        self.transcript_outputs = {}  # Dictionary to store transcript outputs for each device
 
         # Setup GUI components
         self.setup_gui()
+        
+        # Load saved microphone preferences
+        self.load_mic_preferences()
 
     def setup_gui(self):
         """Setup all GUI components"""
@@ -47,26 +61,7 @@ class MicrophoneTranscriberGUI:
         # Load and display microphones
         self.load_microphones()
 
-        # Output text area
-        output_label = tk.Label(
-            self.root, text="Transcription Output:", font=("Arial", 10, "bold")
-        )
-        output_label.pack(pady=(20, 5))
-
-        # Text area with scrollbar
-        text_frame = tk.Frame(self.root)
-        text_frame.pack(pady=5, padx=20, fill=tk.BOTH, expand=True)
-
-        self.output_box = tk.Text(text_frame, height=15, width=70, wrap=tk.WORD)
-        scrollbar = tk.Scrollbar(
-            text_frame, orient=tk.VERTICAL, command=self.output_box.yview
-        )
-        self.output_box.configure(yscrollcommand=scrollbar.set)
-
-        self.output_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # Control buttons frame
+        # Control buttons frame (moved up for better layout)
         button_frame = tk.Frame(self.root)
         button_frame.pack(pady=10)
 
@@ -86,8 +81,8 @@ class MicrophoneTranscriberGUI:
         # Clear button
         clear_btn = tk.Button(
             button_frame,
-            text="🗑️ Clear Output",
-            command=self.clear_output,
+            text="🗑️ Clear All",
+            command=self.clear_all_output,
             font=("Arial", 10),
             bg="#f44336",
             fg="white",
@@ -99,7 +94,7 @@ class MicrophoneTranscriberGUI:
         # Refresh microphones button
         refresh_btn = tk.Button(
             button_frame,
-            text="🔄 Refresh Mics",
+            text="� Refresh Mics",
             command=self.refresh_microphones,
             font=("Arial", 10),
             bg="#2196F3",
@@ -108,6 +103,31 @@ class MicrophoneTranscriberGUI:
             pady=5,
         )
         refresh_btn.pack(side=tk.LEFT, padx=5)
+
+        # Save preferences button
+        save_btn = tk.Button(
+            button_frame,
+            text="� Save Mic Choice",
+            command=self.save_mic_preferences,
+            font=("Arial", 10),
+            bg="#FF9800",
+            fg="white",
+            padx=15,
+            pady=5,
+        )
+        save_btn.pack(side=tk.LEFT, padx=5)
+
+        # Create notebook for tabbed interface
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+
+        # Create tabs for different views
+        self.create_combined_tab()
+        self.create_logs_tab()
+        self.create_transcripts_tab()
+
+        # Set up output mapping after tabs are created
+        self.setup_output_mapping()
 
         # Status bar (display at bottom)
         self.status_label = tk.Label(
@@ -118,6 +138,204 @@ class MicrophoneTranscriberGUI:
             font=("Arial", 9),
         )
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def create_combined_tab(self):
+        """Create the combined view tab showing both logs and transcripts"""
+        combined_frame = ttk.Frame(self.notebook)
+        self.notebook.add(combined_frame, text="📊 Combined View")
+        
+        # Combined output area
+        combined_text_frame = tk.Frame(combined_frame)
+        combined_text_frame.pack(pady=5, padx=10, fill=tk.BOTH, expand=True)
+        
+        self.combined_output = tk.Text(combined_text_frame, height=20, width=100, wrap=tk.WORD)
+        combined_scrollbar = tk.Scrollbar(combined_text_frame, orient=tk.VERTICAL, command=self.combined_output.yview)
+        self.combined_output.configure(yscrollcommand=combined_scrollbar.set)
+        
+        self.combined_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        combined_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def create_logs_tab(self):
+        """Create the logs tab showing system messages and status"""
+        logs_frame = ttk.Frame(self.notebook)
+        self.notebook.add(logs_frame, text="📝 System Logs")
+        
+        # Create paned window for two microphones
+        logs_paned = ttk.PanedWindow(logs_frame, orient=tk.HORIZONTAL)
+        logs_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Microphone 1 logs
+        mic1_log_frame = ttk.LabelFrame(logs_paned, text="Microphone 1 - System Logs")
+        logs_paned.add(mic1_log_frame, weight=1)
+        
+        self.mic1_log_text = tk.Text(mic1_log_frame, height=20, wrap=tk.WORD)
+        mic1_log_scroll = tk.Scrollbar(mic1_log_frame, orient=tk.VERTICAL, command=self.mic1_log_text.yview)
+        self.mic1_log_text.configure(yscrollcommand=mic1_log_scroll.set)
+        
+        self.mic1_log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        mic1_log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Microphone 2 logs
+        mic2_log_frame = ttk.LabelFrame(logs_paned, text="Microphone 2 - System Logs")
+        logs_paned.add(mic2_log_frame, weight=1)
+        
+        self.mic2_log_text = tk.Text(mic2_log_frame, height=20, wrap=tk.WORD)
+        mic2_log_scroll = tk.Scrollbar(mic2_log_frame, orient=tk.VERTICAL, command=self.mic2_log_text.yview)
+        self.mic2_log_text.configure(yscrollcommand=mic2_log_scroll.set)
+        
+        self.mic2_log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        mic2_log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def create_transcripts_tab(self):
+        """Create the transcripts tab showing only the transcribed text"""
+        transcripts_frame = ttk.Frame(self.notebook)
+        self.notebook.add(transcripts_frame, text="📄 Transcripts Only")
+        
+        # Create paned window for two microphones
+        transcripts_paned = ttk.PanedWindow(transcripts_frame, orient=tk.HORIZONTAL)
+        transcripts_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Microphone 1 transcripts
+        mic1_transcript_frame = ttk.LabelFrame(transcripts_paned, text="Microphone 1 - Transcripts")
+        transcripts_paned.add(mic1_transcript_frame, weight=1)
+        
+        self.mic1_transcript_text = tk.Text(mic1_transcript_frame, height=20, wrap=tk.WORD)
+        mic1_transcript_scroll = tk.Scrollbar(mic1_transcript_frame, orient=tk.VERTICAL, command=self.mic1_transcript_text.yview)
+        self.mic1_transcript_text.configure(yscrollcommand=mic1_transcript_scroll.set)
+        
+        self.mic1_transcript_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        mic1_transcript_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Microphone 2 transcripts
+        mic2_transcript_frame = ttk.LabelFrame(transcripts_paned, text="Microphone 2 - Transcripts")
+        transcripts_paned.add(mic2_transcript_frame, weight=1)
+        
+        self.mic2_transcript_text = tk.Text(mic2_transcript_frame, height=20, wrap=tk.WORD)
+        mic2_transcript_scroll = tk.Scrollbar(mic2_transcript_frame, orient=tk.VERTICAL, command=self.mic2_transcript_text.yview)
+        self.mic2_transcript_text.configure(yscrollcommand=mic2_transcript_scroll.set)
+        
+        self.mic2_transcript_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        mic2_transcript_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def save_mic_preferences(self):
+        """Save the currently selected microphones to a config file"""
+        selected = [idx for var, idx in self.mic_vars if var.get()]
+        
+        if len(selected) == 2:
+            # Get microphone names for the selected indices
+            selected_mics = []
+            for idx in selected:
+                for mic_idx, mic_name in self.mics:
+                    if mic_idx == idx:
+                        selected_mics.append({"index": idx, "name": mic_name})
+                        break
+            
+            config = {
+                "saved_microphones": selected_mics,
+                "timestamp": threading.current_thread().name
+            }
+            
+            try:
+                with open(self.config_file, 'w') as f:
+                    json.dump(config, f, indent=2)
+                self.status_var.set("Microphone preferences saved!")
+                messagebox.showinfo("Saved", "Microphone preferences have been saved!")
+            except Exception as e:
+                self.status_var.set(f"Error saving preferences: {e}")
+                messagebox.showerror("Error", f"Failed to save preferences: {e}")
+        else:
+            messagebox.showwarning("Warning", "Please select exactly two microphones before saving.")
+
+    def load_mic_preferences(self):
+        """Load previously saved microphone preferences"""
+        if not os.path.exists(self.config_file):
+            return
+        
+        try:
+            with open(self.config_file, 'r') as f:
+                config = json.load(f)
+            
+            saved_mics = config.get("saved_microphones", [])
+            if len(saved_mics) == 2:
+                # Try to select the saved microphones
+                saved_indices = [mic["index"] for mic in saved_mics]
+                self.auto_select_microphones(saved_indices)
+                
+                mic_names = [mic["name"] for mic in saved_mics]
+                self.status_var.set(f"Loaded preferences: {mic_names[0][:20]}... & {mic_names[1][:20]}...")
+            
+        except Exception as e:
+            self.status_var.set(f"Error loading preferences: {e}")
+
+    def auto_select_microphones(self, indices):
+        """Automatically select microphones by their indices"""
+        for var, idx in self.mic_vars:
+            if idx in indices:
+                var.set(1)
+            else:
+                var.set(0)
+
+    def setup_output_mapping(self):
+        """Set up the mapping between device indices and output text widgets"""
+        # This will be called after microphones are loaded to set up the output mapping
+        self.output_widgets = {
+            "combined": self.combined_output,
+            "mic1_log": self.mic1_log_text,
+            "mic2_log": self.mic2_log_text,
+            "mic1_transcript": self.mic1_transcript_text,
+            "mic2_transcript": self.mic2_transcript_text
+        }
+
+    def get_output_widgets_for_device(self, device_index, selected_indices):
+        """Get the appropriate output widgets for a device"""
+        # Determine if this is mic1 or mic2 based on selection order
+        mic_position = "mic1" if device_index == selected_indices[0] else "mic2"
+        
+        return {
+            "combined": self.output_widgets["combined"],
+            "log": self.output_widgets[f"{mic_position}_log"],
+            "transcript": self.output_widgets[f"{mic_position}_transcript"]
+        }
+
+    def add_log_message(self, device_index, message, selected_indices):
+        """Add a log message to the appropriate widgets"""
+        widgets = self.get_output_widgets_for_device(device_index, selected_indices)
+        
+        # Add timestamp
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        log_message = f"[{timestamp}] {message}\n"
+        
+        # Add to combined view
+        widgets["combined"].insert(tk.END, f"Device {device_index}: {log_message}")
+        widgets["combined"].see(tk.END)
+        
+        # Add to device-specific log
+        widgets["log"].insert(tk.END, log_message)
+        widgets["log"].see(tk.END)
+        
+        # Update UI
+        self.root.update()
+
+    def add_transcript_message(self, device_index, transcript, selected_indices):
+        """Add a transcript message to the appropriate widgets"""
+        widgets = self.get_output_widgets_for_device(device_index, selected_indices)
+        
+        # Add timestamp
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        transcript_message = f"[{timestamp}] {transcript}\n\n"
+        
+        # Add to combined view
+        widgets["combined"].insert(tk.END, f"Device {device_index} TRANSCRIPT: {transcript_message}")
+        widgets["combined"].see(tk.END)
+        
+        # Add to device-specific transcript area
+        widgets["transcript"].insert(tk.END, transcript_message)
+        widgets["transcript"].see(tk.END)
+        
+        # Update UI
+        self.root.update()
 
     def load_microphones(self):
         """Load and display available microphones"""
@@ -165,36 +383,69 @@ class MicrophoneTranscriberGUI:
         self.status_var.set("Refreshing microphones...")
         self.root.update()
         self.load_microphones()
+        # Re-apply saved preferences after refresh
+        self.load_mic_preferences()
 
-    def clear_output(self):
-        """Clear the output text area"""
-        self.output_box.delete(1.0, tk.END)
-        self.status_var.set("Output cleared")
+    def clear_all_output(self):
+        """Clear all output text areas"""
+        self.combined_output.delete(1.0, tk.END)
+        self.mic1_log_text.delete(1.0, tk.END)
+        self.mic2_log_text.delete(1.0, tk.END)
+        self.mic1_transcript_text.delete(1.0, tk.END)
+        self.mic2_transcript_text.delete(1.0, tk.END)
+        self.status_var.set("All output cleared")
 
-    def record_and_transcribe(self, device_index, start_event):
+    def transcribe_and_display_separated(self, device_index, audio_data, samplerate, selected_indices):
+        """Custom transcribe function that separates logs and transcripts"""
+        from src.transcribe_text import transcribe_audio
+        
+        # Add processing log
+        self.add_log_message(device_index, "Processing audio...", selected_indices)
+        
+        # Transcribe the audio
+        transcript = transcribe_audio(audio_data, samplerate, "pt-BR")
+        
+        # Display results
+        if transcript.startswith("Could not") or transcript.startswith("Error"):
+            self.add_log_message(device_index, transcript, selected_indices)
+        else:
+            self.add_log_message(device_index, "Transcription completed successfully", selected_indices)
+            self.add_transcript_message(device_index, transcript, selected_indices)
+
+    def record_and_transcribe(self, device_index, start_event, selected_indices):
         """Capture audio and transcribe it for a specific device"""
-
         def on_audio_captured(device_index, audio_data, samplerate, output_box):
-            transcribe_and_display(device_index, audio_data, samplerate, output_box)
+            # Use our custom transcribe function
+            self.transcribe_and_display_separated(device_index, audio_data, samplerate, selected_indices)
 
+        # Add initial log message
+        self.add_log_message(device_index, f"Ready to record from device {device_index}...", selected_indices)
+        
         capture_audio_with_callback(
-            device_index, self.output_box, start_event, on_audio_captured
+            device_index, None, start_event, on_audio_captured
         )
+
+    def refresh_microphones(self):
+        """Refresh the microphone list"""
+        self.status_var.set("Refreshing microphones...")
+        self.root.update()
+        self.load_microphones()
 
     def start_listening(self, selected_indices):
         """Start listening from selected microphones"""
         start_event = threading.Event()
         threads = []
 
-        self.output_box.insert(
+        # Add initial message to combined view
+        self.combined_output.insert(
             tk.END, "Preparing to record from both microphones simultaneously...\n"
         )
-        self.output_box.update()
+        self.combined_output.update()
 
         # Start all threads
         for idx in selected_indices:
             t = threading.Thread(
-                target=self.record_and_transcribe, args=(idx, start_event)
+                target=self.record_and_transcribe, args=(idx, start_event, selected_indices)
             )
             t.start()
             threads.append(t)
@@ -218,7 +469,7 @@ class MicrophoneTranscriberGUI:
             self.status_var.set("Done.")
         except Exception as e:
             self.status_var.set(f"Error: {e}")
-            self.output_box.insert(tk.END, f"Error during recording: {str(e)}\n")
+            self.combined_output.insert(tk.END, f"Error during recording: {str(e)}\n")
         finally:
             self.listen_btn.config(state=tk.NORMAL, text="🎤 Listen & Transcribe")
             self.root.update()
@@ -245,7 +496,7 @@ class MicrophoneTranscriberGUI:
         )
 
         if messagebox.askyesno("Confirm Recording", confirm_msg):
-            self.output_box.delete(1.0, tk.END)
+            self.clear_all_output()
             threading.Thread(
                 target=self.threaded_listen, args=(selected,), daemon=True
             ).start()

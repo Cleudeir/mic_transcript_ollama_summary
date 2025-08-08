@@ -86,36 +86,44 @@ def capture_audio_with_callback(
 
     Args:
         device_index (int): The index of the audio device
-        output_box: GUI text box for status updates
+        output_box: GUI text box for status updates (can be None)
         start_event: Threading event to synchronize start
         on_audio_captured: Callback function to call with captured audio
     """
     duration = 20  # seconds
     try:
         samplerate = int(sd.query_devices(device_index)["default_samplerate"])
-        output_box.insert(tk.END, f"Ready to record from device {device_index}...\n")
-        output_box.update()
+        
+        if output_box is not None:
+            output_box.insert(tk.END, f"Ready to record from device {device_index}...\n")
+            output_box.update()
 
         # Wait for all microphones to be ready
         start_event.wait()
 
-        output_box.insert(tk.END, f"Recording from device {device_index}...\n")
-        output_box.update()
+        if output_box is not None:
+            output_box.insert(tk.END, f"Recording from device {device_index}...\n")
+            output_box.update()
 
         audio, samplerate = capture_audio(device_index, duration)
 
         if audio is not None:
-            output_box.insert(tk.END, f"Audio captured from device {device_index}...\n")
-            output_box.update()
+            if output_box is not None:
+                output_box.insert(tk.END, f"Audio captured from device {device_index}...\n")
+                output_box.update()
 
             # Call the callback with the captured audio
             on_audio_captured(device_index, audio, samplerate, output_box)
         else:
-            output_box.insert(
-                tk.END, f"Failed to capture audio from device {device_index}\n"
-            )
-            output_box.update()
+            if output_box is not None:
+                output_box.insert(
+                    tk.END, f"Failed to capture audio from device {device_index}\n"
+                )
+                output_box.update()
 
     except Exception as e:
-        output_box.insert(tk.END, f"Device {device_index}: Error - {e}\n")
-        output_box.update()
+        if output_box is not None:
+            output_box.insert(tk.END, f"Device {device_index}: Error - {e}\n")
+            output_box.update()
+        else:
+            print(f"Device {device_index}: Error - {e}")
