@@ -1,0 +1,121 @@
+import sounddevice as sd
+import numpy as np
+import threading
+import tkinter as tk
+
+
+def is_microphone_active(device_index):
+    """Test if a microphone is active by trying to record a small sample"""
+    try:
+        device_info = sd.query_devices(device_index)
+        if device_info["max_input_channels"] == 0:
+            return False
+
+        # Try to record a very short sample to test if mic is working
+        samplerate = int(device_info["default_samplerate"])
+        test_audio = sd.rec(
+            int(0.1 * samplerate),  # 0.1 second test
+            samplerate=samplerate,
+            channels=1,
+            dtype="int16",
+            device=device_index,
+        )
+        sd.wait()
+
+        # Check if we got any audio data (not just silence)
+        if np.max(np.abs(test_audio)) > 100:  # Some threshold for activity
+            return True
+        return True  # Even if silent, if no error occurred, consider it active
+    except Exception:
+        return False
+
+
+def get_microphone_list():
+    """Get only active/working microphones"""
+    active_mics = []
+    all_devices = sd.query_devices()
+
+    for idx, device in enumerate(all_devices):
+        if device["max_input_channels"] > 0:
+            # Check if it's the default input device or if it's explicitly active
+            try:
+                default_input = sd.default.device[0]
+                if idx == default_input or is_microphone_active(idx):
+                    active_mics.append((idx, device["name"]))
+            except Exception:
+                # If we can't determine, include it anyway
+                active_mics.append((idx, device["name"]))
+
+    return active_mics
+
+
+def capture_audio(device_index, duration=20):
+    """
+    Capture audio from a specific microphone device
+
+    Args:
+        device_index (int): The index of the audio device
+        duration (int): Duration in seconds to record
+
+    Returns:
+        tuple: (audio_data, samplerate) or (None, None) if error
+    """
+    try:
+        samplerate = int(sd.query_devices(device_index)["default_samplerate"])
+
+        audio = sd.rec(
+            int(duration * samplerate),
+            samplerate=samplerate,
+            channels=1,
+            dtype="int16",
+            device=device_index,
+        )
+        sd.wait()
+
+        return audio, samplerate
+    except Exception as e:
+        print(f"Error capturing audio from device {device_index}: {e}")
+        return None, None
+
+
+def capture_audio_with_callback(
+    device_index, output_box, start_event, on_audio_captured
+):
+    """
+    Capture audio and call a callback function when done
+
+    Args:
+        device_index (int): The index of the audio device
+        output_box: GUI text box for status updates
+        start_event: Threading event to synchronize start
+        on_audio_captured: Callback function to call with captured audio
+    """
+    duration = 20  # seconds
+    try:
+        samplerate = int(sd.query_devices(device_index)["default_samplerate"])
+        output_box.insert(tk.END, f"Ready to record from device {device_index}...\n")
+        output_box.update()
+
+        # Wait for all microphones to be ready
+        start_event.wait()
+
+        output_box.insert(tk.END, f"Recording from device {device_index}...\n")
+        output_box.update()
+
+        audio, samplerate = capture_audio(device_index, duration)
+
+        if audio is not None:
+            output_box.insert(tk.END, f"Audio captured from device {device_index}...\n")
+            output_box.update()
+
+            # Call the callback with the captured audio
+            on_audio_captured(device_index, audio, samplerate, output_box)
+        else:
+            output_box.insert(
+                tk.END, f"Failed to capture audio from device {device_index}\n"
+            )
+            output_box.update()
+
+    except Exception as e:
+        output_box.insert(tk.END, f"Device {device_index}: Error - {e}\n")
+        output_box.update()
