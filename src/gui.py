@@ -27,49 +27,6 @@ class MicrophoneTranscriberGUI:
         self.root = tk.Tk()
         self.root.title("Microphone Selector & Transcriber")
         self.root.geometry("900x700")
-
-        # Initialize variables
-        self.mic_vars = []
-        self.mics = []
-        self.config_file = "mic_config.json"
-        self.is_recording = False
-        self.stop_events = []  # List of stop events for real-time recording
-        self.recording_threads = []  # List of recording threads
-        self.is_shutting_down = False  # Flag to track shutdown status
-
-        # Create separate text widgets for logs and transcripts
-        self.log_outputs = {}  # Dictionary to store log outputs for each device
-        self.transcript_outputs = (
-            {}
-        )  # Dictionary to store transcript outputs for each device
-
-        # Real-time markdown saving
-        self.markdown_file_path = None
-        self.markdown_file = None
-        self.session_start_time = None
-
-        # Ollama service for generating meeting minutes
-        self.ollama_service = OllamaService()
-        self.ollama_available = False
-        self.auto_generate_ata = True  # Automatic generation enabled by default
-
-        # Load main configuration
-        self.config = self.load_main_config()
-
-        # Initialize selected transcript path for ATA generation
-        self.selected_transcript_path = None
-
-        # Setup GUI components
-        self.setup_gui()
-
-        # Load saved microphone preferences
-        self.load_mic_preferences()
-
-        # Check Ollama availability after GUI is setup
-        self.root.after(1000, self.check_ollama_availability)  # Delay 1 second
-
-    def setup_gui(self):
-        """Setup all GUI components"""
         # Create menu bar
         # self.setup_menu_bar()
 
@@ -82,7 +39,6 @@ class MicrophoneTranscriberGUI:
         # Status bar variable (must be initialized before usage)
         self.status_var = tk.StringVar()
         self.status_var.set("")
-        # ...existing code...
 
         # Control buttons frame (moved up for better layout)
         button_frame = tk.Frame(self.root)
@@ -128,7 +84,8 @@ class MicrophoneTranscriberGUI:
         self.create_logs_tab()
         self.create_transcripts_tab()
         self.create_files_tab()
-        self.create_config_tab()
+        self.create_mic_config_tab()
+        self.create_ollama_config_tab()
 
         # Set up output mapping after tabs are created
         self.setup_output_mapping()
@@ -147,10 +104,6 @@ class MicrophoneTranscriberGUI:
         """Setup the application menu bar"""
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
-
-        # ...existing code...
-
-        # Settings menu
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="⚙️ Settings", menu=settings_menu)
 
@@ -573,20 +526,20 @@ class MicrophoneTranscriberGUI:
         # Initialize files list
         self.refresh_files_list()
 
-    def create_config_tab(self):
-        """Create the configuration tab for settings"""
-        config_frame = ttk.Frame(self.notebook)
-        self.notebook.add(config_frame, text="⚙️ Configuration")
+    def create_mic_config_tab(self):
+        """Create the microphone configuration tab"""
+        mic_config_frame = ttk.Frame(self.notebook)
+        self.notebook.add(mic_config_frame, text="🎤 Microphone Config")
 
         # Create main container with scrollable frame
-        canvas = tk.Canvas(config_frame)
-        scrollbar = ttk.Scrollbar(config_frame, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(mic_config_frame)
+        scrollbar = ttk.Scrollbar(
+            mic_config_frame, orient="vertical", command=canvas.yview
+        )
         scrollable_frame = ttk.Frame(canvas)
-
         scrollable_frame.bind(
             "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
-
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
@@ -615,6 +568,30 @@ class MicrophoneTranscriberGUI:
             relief="groove",
         )
         refresh_mic_btn.pack(anchor=tk.W, pady=5)
+
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Load current configuration
+        self.refresh_config_microphones()
+
+    def create_ollama_config_tab(self):
+        """Create the Ollama configuration tab"""
+        ollama_config_frame = ttk.Frame(self.notebook)
+        self.notebook.add(ollama_config_frame, text="🤖 Ollama Config")
+
+        # Create main container with scrollable frame
+        canvas = tk.Canvas(ollama_config_frame)
+        scrollbar = ttk.Scrollbar(
+            ollama_config_frame, orient="vertical", command=canvas.yview
+        )
+        scrollable_frame = ttk.Frame(canvas)
+        scrollable_frame.bind(
+            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
         # Ollama Configuration Section
         ollama_section = ttk.LabelFrame(
@@ -696,7 +673,6 @@ class MicrophoneTranscriberGUI:
 
         # Load current configuration
         self.load_config_tab_values()
-        self.refresh_config_microphones()
 
     def load_config_tab_values(self):
         """Load current configuration values into the config tab"""
