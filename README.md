@@ -212,7 +212,7 @@ Example `mic_config.json`:
 
 1. **Run the application**: `python main.py`
 2. **Configure microphones**: Select exactly 2 microphones from the list
-3. **Start recording**: Click "🎤 Start Continuous Recording & Transcription"
+3. **Start recording**: Click "🎤 Start"
 4. **Speak normally**: The app transcribes in real-time
 5. **Stop recording**: Click "🛑 Stop Continuous Recording"
 6. **Auto-generation**: If Ollama is available, ata is generated automatically

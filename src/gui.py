@@ -27,16 +27,16 @@ class MicrophoneTranscriberGUI:
         self.root = tk.Tk()
         self.root.title("Microphone Selector & Transcriber")
         self.root.geometry("900x700")
-        
+
         # Initialize configuration early
-        self.config_file = "mic_config.json"
-        
+        self.config_file = "config.json"
+
         # Initialize other attributes that might be accessed early
         self.auto_generate_ata = True
         self.ollama_available = False
         self.markdown_file = None
         self.markdown_file_path = None
-        
+
         # Recording state
         self.is_recording = False
         # Microphone variables for selection
@@ -61,7 +61,7 @@ class MicrophoneTranscriberGUI:
         # Listen button
         self.listen_btn = tk.Button(
             button_frame,
-            text="🎤 Start Continuous Recording & Transcription",
+            text="🎤 Start",
             command=self.toggle_recording,
             font=("Arial", 12, "bold"),
             bg="#4CAF50",
@@ -110,6 +110,9 @@ class MicrophoneTranscriberGUI:
         # Load and ensure main config exists with defaults
         self.config = self.load_main_config()
         self.ensure_config_file_exists()
+
+        # Migrate old mic_config.json to unified config.json if needed
+        self.migrate_old_mic_config()
 
         # Status bar (display at bottom)
         self.status_label = tk.Label(
@@ -632,6 +635,11 @@ class MicrophoneTranscriberGUI:
             url_frame, textvariable=self.ollama_url_var, width=50
         )
         self.ollama_url_entry.pack(fill=tk.X, pady=(2, 5))
+
+        # Set placeholder text when empty
+        self.ollama_url_entry.bind("<FocusIn>", self._on_url_focus_in)
+        self.ollama_url_entry.bind("<FocusOut>", self._on_url_focus_out)
+
         self.ollama_url_var.trace("w", self.on_ollama_url_change)
 
         # Test connection button
@@ -696,24 +704,74 @@ class MicrophoneTranscriberGUI:
         self.load_config_tab_values()
 
     def load_config_tab_values(self):
-        """Load current configuration values into the config tab"""
+        """Load current configuration values into the config tab from unified config.json"""
         try:
-            # Load current Ollama URL
+            # Load from unified config file
+            config = {}
+            if os.path.exists(self.config_file):
+                with open(self.config_file, "r") as f:
+                    config = json.load(f)
+
+            # Load current Ollama URL from service or config
             current_url = getattr(self.ollama_service, "base_url", None)
-            if not current_url:
-                current_url = "http://localhost:11434"
+            if not current_url or current_url.strip() == "":
+                # Try to load from config file
+                ollama_config = config.get("ollama", {})
+                current_url = ollama_config.get("base_url", "http://localhost:11434")
                 self.ollama_service.base_url = current_url
             self.ollama_url_var.set(current_url)
 
-            # Load current model
+            # Load current model from service or config
             current_model = getattr(self.ollama_service, "model_name", None)
             if not current_model:
-                current_model = "llama3.2"
+                # Try to load from config file
+                ollama_config = config.get("ollama", {})
+                current_model = ollama_config.get("model_name", "llama3.2")
                 self.ollama_service.model_name = current_model
             self.model_var.set(current_model)
 
+            # Auto-test connection and load models when URL is populated
+            if current_url:
+                self.root.after(100, self._auto_test_connection_and_load_models)
+
         except Exception as e:
             self.status_var.set(f"Error loading config: {e}")
+
+    def _auto_test_connection_and_load_models(self):
+        """Automatically test connection and load models after URL is set"""
+        try:
+            # Show that we're testing
+            self.connection_status_label.config(
+                text="🔄 Testing connection...", fg="orange"
+            )
+            self.model_status_label.config(
+                text="Waiting for connection test...", fg="gray"
+            )
+            self.root.update_idletasks()
+
+            # Test connection
+            if self.ollama_service.is_ollama_available():
+                self.connection_status_label.config(
+                    text="✅ Connection successful", fg="green"
+                )
+                # Automatically load models
+                self.model_status_label.config(text="Loading models...", fg="orange")
+                self.root.update_idletasks()
+                self.refresh_ollama_models()
+            else:
+                self.connection_status_label.config(
+                    text="⚠️ Connection not available", fg="gray"
+                )
+                self.model_status_label.config(
+                    text="Test connection to load models", fg="gray"
+                )
+        except Exception as e:
+            self.connection_status_label.config(
+                text="⚠️ Connection test failed", fg="gray"
+            )
+            self.model_status_label.config(
+                text="Check URL and test connection", fg="gray"
+            )
 
     def on_microphone_selection_change(self):
         """Handle microphone selection changes in the main interface"""
@@ -755,14 +813,37 @@ class MicrophoneTranscriberGUI:
             self.status_var.set(f"Error updating microphone selection: {e}")
 
     def save_microphone_config(self, selected_mics):
-        """Save microphone configuration to file"""
+        """Save microphone configuration to unified config.json file"""
         try:
-            config = {
+            # Load existing config or create new one
+            config = {}
+            if os.path.exists(self.config_file):
+                with open(self.config_file, "r") as f:
+                    config = json.load(f)
+
+            # Update microphone configuration
+            config["microphones"] = {
                 "saved_microphones": [
                     {"index": index, "name": name} for index, name in selected_mics
                 ],
                 "timestamp": datetime.datetime.now().isoformat(),
             }
+
+            # Ensure ollama config exists with defaults if not present
+            if "ollama" not in config:
+                config["ollama"] = {
+                    "base_url": "http://localhost:11434",
+                    "model_name": "llama3.2",
+                    "temperature": 0.3,
+                    "top_p": 0.8,
+                    "num_predict": 2048,
+                }
+
+            # Ensure other defaults
+            if "auto_generate_ata" not in config:
+                config["auto_generate_ata"] = True
+            if "language" not in config:
+                config["language"] = "pt-BR"
 
             with open(self.config_file, "w") as f:
                 json.dump(config, f, indent=2)
@@ -783,17 +864,24 @@ class MicrophoneTranscriberGUI:
                 success = self.ollama_service.update_config(ollama_url=new_url)
                 if success:
                     self.status_var.set("Ollama URL updated")
-                    self.connection_status_label.config(
-                        text="Status: URL changed, test connection", fg="orange"
-                    )
                     # Clear models list since URL changed
                     self.model_combobox["values"] = []
                     self.model_var.set("")
-                    self.model_status_label.config(
-                        text="Refresh models after testing connection"
-                    )
+                    # Auto-test connection and load models after URL change
+                    self.root.after(200, self._auto_test_connection_and_load_models)
         except Exception as e:
             self.status_var.set(f"Error updating Ollama URL: {e}")
+
+    def _on_url_focus_in(self, event):
+        """Handle URL entry focus in - show default if empty"""
+        if not self.ollama_url_var.get().strip():
+            self.ollama_url_var.set("http://localhost:11434")
+            self.ollama_url_entry.selection_range(0, tk.END)
+
+    def _on_url_focus_out(self, event):
+        """Handle URL entry focus out - set default if empty"""
+        if not self.ollama_url_var.get().strip():
+            self.ollama_url_var.set("http://localhost:11434")
 
     def on_model_change(self, event=None):
         """Handle model selection changes"""
@@ -1532,8 +1620,45 @@ class MicrophoneTranscriberGUI:
             except Exception as e:
                 self.status_var.set(f"Error creating config file: {e}")
 
+    def migrate_old_mic_config(self):
+        """Migrate microphone configuration from old mic_config.json to unified config.json"""
+        old_config_path = "mic_config.json"
+        if not os.path.exists(old_config_path):
+            return
+
+        try:
+            # Load old mic config
+            with open(old_config_path, "r") as f:
+                old_config = json.load(f)
+
+            # Load current unified config
+            config = {}
+            if os.path.exists(self.config_file):
+                with open(self.config_file, "r") as f:
+                    config = json.load(f)
+
+            # Only migrate if microphones section doesn't exist in new config
+            if "microphones" not in config:
+                config["microphones"] = {
+                    "saved_microphones": old_config.get("saved_microphones", []),
+                    "timestamp": old_config.get(
+                        "timestamp", datetime.datetime.now().isoformat()
+                    ),
+                }
+
+                # Save updated unified config
+                with open(self.config_file, "w") as f:
+                    json.dump(config, f, indent=2)
+
+                # Remove old config file
+                os.remove(old_config_path)
+                self.status_var.set("Migrated microphone configuration to config.json")
+
+        except Exception as e:
+            self.status_var.set(f"Error migrating mic config: {e}")
+
     def load_mic_preferences(self):
-        """Load previously saved microphone preferences"""
+        """Load previously saved microphone preferences from unified config.json"""
         if not os.path.exists(self.config_file):
             return
 
@@ -1541,7 +1666,10 @@ class MicrophoneTranscriberGUI:
             with open(self.config_file, "r") as f:
                 config = json.load(f)
 
-            saved_mics = config.get("saved_microphones", [])
+            # Load from unified config structure
+            microphone_config = config.get("microphones", {})
+            saved_mics = microphone_config.get("saved_microphones", [])
+
             if len(saved_mics) == 2:
                 # Try to select the saved microphones
                 saved_indices = [mic["index"] for mic in saved_mics]
@@ -1779,7 +1907,7 @@ class MicrophoneTranscriberGUI:
 
             # Update UI state
             self.is_recording = True
-            self.listen_btn.config(text="🛑 Stop Continuous Recording", bg="#f44336")
+            self.listen_btn.config(text="🛑 Stop", bg="#f44336")
             self.status_var.set("Continuous recording active - audio never stops...")
 
             # Start real-time markdown saving
@@ -1822,9 +1950,7 @@ class MicrophoneTranscriberGUI:
         self.auto_save_transcripts()
 
         # Update UI
-        self.listen_btn.config(
-            text="🎤 Start Continuous Recording & Transcription", bg="#4CAF50"
-        )
+        self.listen_btn.config(text="🎤 Start", bg="#4CAF50")
         self.status_var.set("Continuous recording stopped - transcripts auto-saved")
 
         # Add log message
@@ -2568,7 +2694,7 @@ class MicrophoneTranscriberGUI:
    • Test microphones to ensure they work properly
 
 2. RECORDING:
-   • Click "Start Continuous Recording & Transcription"
+   • Click "Start"
    • Speak normally - transcription happens in real-time
    • Audio is captured continuously without pauses
 
