@@ -58,12 +58,12 @@ def transcribe_audio_realtime(audio_data, samplerate, language="pt-BR"):
         str: Transcribed text or None if no meaningful audio
     """
     global _recognizer
-    
+
     try:
         # Quick check for meaningful audio content
         if np.max(np.abs(audio_data)) < 100:
             return None  # Too quiet, skip transcription
-        
+
         # Convert audio data to speech_recognition format
         audio_bytes = audio_data.tobytes()
         audio_data_sr = sr.AudioData(audio_bytes, samplerate, 2)
@@ -71,12 +71,12 @@ def transcribe_audio_realtime(audio_data, samplerate, language="pt-BR"):
         # Perform transcription with timeout for real-time
         start_time = time.time()
         text = _recognizer.recognize_google(audio_data_sr, language=language)
-        
+
         # Log processing time for debugging
         processing_time = time.time() - start_time
         if processing_time > 2.0:  # Log if transcription takes too long
             print(f"Slow transcription: {processing_time:.2f}s")
-        
+
         return text
     except sr.UnknownValueError:
         return None  # No speech detected
@@ -89,20 +89,20 @@ def transcribe_audio_realtime(audio_data, samplerate, language="pt-BR"):
 def transcribe_audio_async(audio_data, samplerate, language="pt-BR"):
     """
     Ultra-fast asynchronous transcription optimized for continuous real-time processing
-    
+
     Returns:
         str: Transcribed text or status message
     """
     import concurrent.futures
-    
+
     # Quick silence check - skip transcription for very quiet audio
     if np.max(np.abs(audio_data)) < 80:
         return None
-    
+
     def transcribe_worker():
         """Fast transcription worker with timeout"""
         global _recognizer
-        
+
         try:
             # Convert audio data to speech_recognition format
             audio_bytes = audio_data.tobytes()
@@ -110,18 +110,18 @@ def transcribe_audio_async(audio_data, samplerate, language="pt-BR"):
 
             # Use optimized recognizer settings for speed
             _recognizer.operation_timeout = 2.0  # Quick timeout for real-time
-            
+
             # Perform transcription
             text = _recognizer.recognize_google(audio_data_sr, language=language)
             return text
-            
+
         except sr.UnknownValueError:
             return None  # No speech detected
         except sr.RequestError as e:
             return f"Network error: {e}"
         except Exception as e:
             return f"Error: {e}"
-    
+
     # Use ThreadPoolExecutor for better performance
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(transcribe_worker)
@@ -140,12 +140,12 @@ def transcribe_audio_fast(audio_data, samplerate, language="pt-BR"):
     Fastest possible transcription for continuous pipeline - no timeout handling
     """
     global _recognizer
-    
+
     try:
         # Ultra-quick silence check
         if np.max(np.abs(audio_data)) < 100:
             return None
-        
+
         # Convert audio data to speech_recognition format
         audio_bytes = audio_data.tobytes()
         audio_data_sr = sr.AudioData(audio_bytes, samplerate, 2)
@@ -153,7 +153,7 @@ def transcribe_audio_fast(audio_data, samplerate, language="pt-BR"):
         # Direct transcription without timeout handling for speed
         text = _recognizer.recognize_google(audio_data_sr, language=language)
         return text
-        
+
     except sr.UnknownValueError:
         return None  # No speech detected
     except sr.RequestError as e:

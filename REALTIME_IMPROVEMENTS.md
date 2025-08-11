@@ -3,14 +3,16 @@
 ## 🚀 Enhanced Features
 
 ### 1. Optimized Audio Capture
+
 - **Streaming Audio Input**: Replaced blocking `sd.rec()` with `sd.InputStream()` for continuous, low-latency audio capture
 - **Smaller Chunk Duration**: Reduced from 5 seconds to 2-3 seconds for faster response
 - **Lower Audio Threshold**: Reduced sensitivity threshold from 100 to 50 for better speech detection
 - **Circular Buffer**: Implemented efficient audio buffering to prevent audio loss
 
 ### 2. Improved Transcription Performance
+
 - **Global Recognizer**: Single recognizer instance to avoid recreation overhead
-- **Optimized Settings**: 
+- **Optimized Settings**:
   - Lower energy threshold (200 vs 300)
   - Shorter pause threshold (0.3s vs 0.5s)
   - Shorter phrase threshold (0.2s vs 0.3s)
@@ -18,6 +20,7 @@
 - **Queue Management**: Limited queue size to prevent transcription lag
 
 ### 3. Enhanced User Interface
+
 - **Live Indicators**: Added emoji indicators for different states:
   - 🔊 Processing audio
   - ✅ Transcription completed
@@ -29,6 +32,7 @@
 - **Better Button Labels**: "Start Live Recording & Transcription" instead of generic text
 
 ### 4. Real-time Processing Pipeline
+
 ```
 Audio Input → Streaming Buffer → 2s Chunks → Async Queue → Transcription → Display
 ```
@@ -36,17 +40,20 @@ Audio Input → Streaming Buffer → 2s Chunks → Async Queue → Transcription
 ### 5. Technical Improvements
 
 #### Audio Capture (`src/capture_audio.py`)
+
 - Streaming audio with callback function
 - Non-blocking audio processing
 - Better error handling and recovery
 
 #### Transcription (`src/transcribe_text.py`)
+
 - Global recognizer with optimized settings
 - Async transcription with timeout
 - Better error handling for network issues
 - Performance monitoring
 
 #### GUI (`src/gui.py`)
+
 - Queue-based transcription processing
 - Separate threads for audio and transcription
 - Real-time visual feedback
@@ -55,6 +62,7 @@ Audio Input → Streaming Buffer → 2s Chunks → Async Queue → Transcription
 ## 🎯 Usage Instructions
 
 1. **Start the Application**:
+
    ```bash
    python main.py
    ```
@@ -76,18 +84,21 @@ Audio Input → Streaming Buffer → 2s Chunks → Async Queue → Transcription
 ## 🔧 Key Optimizations
 
 ### Latency Reduction
+
 - **Audio chunks**: 2-3 seconds (was 5 seconds)
 - **Processing queue**: Limited size prevents backlog
 - **Streaming input**: Eliminates recording delays
 - **Async processing**: Non-blocking transcription
 
 ### Quality Improvements  
+
 - **Lower noise threshold**: Better sensitivity
 - **Optimized speech recognition settings**
 - **Better error handling and recovery**
 - **Performance monitoring and feedback**
 
 ### User Experience
+
 - **Real-time visual feedback**
 - **Clear status indicators**
 - **Processing time display**
