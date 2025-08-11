@@ -43,11 +43,14 @@ class MicrophoneTranscriberGUI:
 
         # Status bar variable (must be initialized before usage)
         self.status_var = tk.StringVar()
-        self.status_var.set("")
+        self.status_var.set("Ready - Use tabs to configure settings")
 
         # Load and ensure main config exists with defaults (need this before setting title)
         self.config = self.load_main_config()
         self.ensure_config_file_exists()
+        
+        # Sync instance variables with config
+        self.auto_generate_ata = self.config.get("auto_generate_ata", True)
 
         # Initialize translation system with language from config
         set_global_language(self.config.get("language", "pt-BR"))
@@ -118,6 +121,9 @@ class MicrophoneTranscriberGUI:
 
         # Migrate old mic_config.json to unified config.json if needed
         self.migrate_old_mic_config()
+
+        # Initialize Ollama connection and load models on startup
+        self.root.after(1000, self.initialize_ollama_on_startup)
 
         # Status bar (display at bottom)
         self.status_label = tk.Label(
@@ -1016,6 +1022,95 @@ class MicrophoneTranscriberGUI:
             self.model_status_label.config(
                 text=f"Error loading models: {str(e)[:30]}...", fg="red"
             )
+
+    def initialize_ollama_on_startup(self):
+        """Initialize Ollama connection, load models, and send greeting on app startup"""
+        try:
+            self.status_var.set("Initializing Ollama connection...")
+            self.root.update_idletasks()
+            
+            # Test connection first
+            if self.ollama_service.is_ollama_available():
+                self.status_var.set("Ollama connected! Loading models...")
+                self.root.update_idletasks()
+                
+                # Update connection status in the config tab
+                if hasattr(self, 'connection_status_label'):
+                    self.connection_status_label.config(
+                        text="✅ Connection successful", fg="green"
+                    )
+                
+                # Load models
+                models = self.ollama_service.get_available_models()
+                
+                if models:
+                    # Update model combobox if it exists
+                    if hasattr(self, 'model_combobox'):
+                        self.model_combobox["values"] = models
+                        
+                        # Set current model
+                        current_model = self.ollama_service.model_name
+                        if current_model in models:
+                            self.model_var.set(current_model)
+                            if hasattr(self, 'model_status_label'):
+                                self.model_status_label.config(
+                                    text=f"Active model: {current_model}", fg="green"
+                                )
+                        else:
+                            # Set first model as default
+                            self.model_var.set(models[0])
+                            if hasattr(self, 'model_status_label'):
+                                self.model_status_label.config(
+                                    text=f"Available models loaded ({len(models)})", fg="blue"
+                                )
+                    
+                    self.status_var.set(f"Models loaded! ({len(models)} available)")
+                    self.root.update_idletasks()
+                    
+                    # Send a "hi" greeting to the model
+                    self.root.after(500, self.send_greeting_to_model)
+                    
+                else:
+                    self.status_var.set("Ollama connected but no models available")
+                    if hasattr(self, 'model_status_label'):
+                        self.model_status_label.config(text="No models available", fg="red")
+                
+            else:
+                self.status_var.set("Could not connect to Ollama service")
+                if hasattr(self, 'connection_status_label'):
+                    self.connection_status_label.config(
+                        text="❌ Connection failed", fg="red"
+                    )
+                if hasattr(self, 'model_status_label'):
+                    self.model_status_label.config(
+                        text="Fix connection to load models", fg="red"
+                    )
+                    
+        except Exception as e:
+            self.status_var.set(f"Error initializing Ollama: {str(e)[:50]}...")
+            print(f"Ollama initialization error: {e}")
+
+    def send_greeting_to_model(self):
+        """Send a greeting message to test the model"""
+        try:
+            self.status_var.set("Testing model with greeting...")
+            self.root.update_idletasks()
+            
+            # Use the existing test method in OllamaService
+            result = self.ollama_service.test_model_with_hello()
+            
+            if result.get("success", False):
+                response = result.get("response", "")
+                self.status_var.set(f"✅ Model ready! Response: {response[:30]}...")
+                print(f"Model greeting response: {response}")
+            else:
+                error = result.get("error", "Unknown error")
+                self.status_var.set(f"Model test failed: {error[:40]}...")
+                print(f"Model greeting error: {error}")
+                
+        except Exception as e:
+            self.status_var.set(f"Model test error: {str(e)[:40]}...")
+            print(f"Model greeting error: {e}")
 
     def refresh_files_list(self):
         """Refresh the list of generated files"""
@@ -2080,6 +2175,17 @@ class MicrophoneTranscriberGUI:
             "auto_generate_ata": True,
             "language": "pt-BR",
         }
+
+    def save_main_config(self):
+        """Save main configuration to config.json"""
+        try:
+            config_path = "config.json"
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
+            return True
+        except Exception as e:
+            print(f"Error saving main config: {e}")
+            return False
 
     def ensure_config_file_exists(self):
         """Ensure config.json exists with default values"""
@@ -3640,6 +3746,11 @@ with focus on continuous, uninterrupted operation.
     def toggle_auto_ata_generation(self):
         """Toggle automatic ata generation on/off"""
         self.auto_generate_ata = not self.auto_generate_ata
+        
+        # Update config and save
+        self.config["auto_generate_ata"] = self.auto_generate_ata
+        self.save_main_config()
+        
         status = "ATIVADA" if self.auto_generate_ata else "DESATIVADA"
         messagebox.showinfo(
             "Geração Automática de Ata",

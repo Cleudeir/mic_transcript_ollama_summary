@@ -101,7 +101,9 @@ class OllamaService:
         """
         try:
             # Create a temporary client with shorter timeout for testing
-            test_client = ollama.Client(host=self.base_url, timeout=10)
+            test_client = ollama.Client(
+                host=self.base_url, timeout=5
+            )  # Reduced timeout
             # List available models to test connection
             models = test_client.list()
             return True
@@ -194,6 +196,47 @@ class OllamaService:
         except Exception as e:
             self.logger.error(f"Error pulling model: {e}")
             return False
+
+    def test_model_with_hello(self) -> Dict[str, Any]:
+        """
+        Test the model by sending a simple 'hi' message
+
+        Returns:
+            Dict containing success status and response
+        """
+        try:
+            self.logger.info(
+                f"Testing model {self.model_name} with a simple message..."
+            )
+
+            response = self.client.chat(
+                model=self.model_name,
+                messages=[{"role": "user", "content": "hi"}],
+                options={
+                    "temperature": 0.3,
+                    "num_predict": 50,  # Short response for testing
+                },
+            )
+
+            generated_content = response["message"]["content"]
+
+            return {
+                "success": True,
+                "response": generated_content,
+                "model_used": self.model_name,
+                "base_url": self.base_url,
+                "timestamp": datetime.now().isoformat(),
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error testing model: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "model_used": self.model_name,
+                "base_url": self.base_url,
+                "timestamp": datetime.now().isoformat(),
+            }
 
     def generate_meeting_minutes(
         self, markdown_content: str, language: str = "pt-BR"
@@ -490,10 +533,18 @@ GENERATE THE MEETING MINUTES:
 
 
 def test_ollama_connection():
-    """Test function to check Ollama connectivity"""
+    """Test function to check Ollama connectivity and model functionality"""
     service = OllamaService()
 
-    print(f"Testing Ollama connection to {service.base_url}...")
+    print(f"🔧 Configuration loaded from config.json:")
+    print(f"   Base URL: {service.base_url}")
+    print(f"   Model: {service.model_name}")
+    print(
+        f"   Temperature: {service.config.get('ollama', {}).get('temperature', 'default')}"
+    )
+    print()
+
+    print(f"🔌 Testing Ollama connection to {service.base_url}...")
     if not service.is_ollama_available():
         print(
             f"❌ Ollama is not available at {service.base_url}. Please check the connection."
@@ -502,6 +553,7 @@ def test_ollama_connection():
 
     print("✅ Ollama is available!")
 
+    print(f"🤖 Checking if model {service.model_name} is available...")
     if not service.is_model_available():
         print(f"⚠️ Model {service.model_name} is not available. Attempting to pull...")
         if service.pull_model():
@@ -512,6 +564,21 @@ def test_ollama_connection():
     else:
         print(f"✅ Model {service.model_name} is available!")
 
+    # Test the model with a simple message
+    print(f"💬 Testing model with 'hi' message...")
+    test_result = service.test_model_with_hello()
+
+    if test_result["success"]:
+        print(f"✅ Model test successful!")
+        print(
+            f"   Response: {test_result['response'][:100]}{'...' if len(test_result['response']) > 100 else ''}"
+        )
+        print(f"   Model used: {test_result['model_used']}")
+    else:
+        print(f"❌ Model test failed: {test_result['error']}")
+        return False
+
+    print("\n🎉 All tests passed! Ollama service is working correctly.")
     return True
 
 
