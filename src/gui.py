@@ -37,6 +37,7 @@ class MicrophoneTranscriberGUI:
 
         # Recording state
         self.is_recording = False
+        self.is_paused = False
         # Microphone variables for selection
         self.mic_vars = []
         # Create menu bar
@@ -67,6 +68,9 @@ class MicrophoneTranscriberGUI:
             font=("Arial", 16, "bold"),
         )
         title_label.pack(pady=10)
+
+        # Recording Control Buttons
+        self.create_recording_controls()
 
         # Create notebook for tabbed interface
         self.notebook = ttk.Notebook(self.root)
@@ -109,6 +113,9 @@ class MicrophoneTranscriberGUI:
 
         # Ensure configuration is loaded in UI after everything is initialized
         self.root.after(500, self.ensure_config_loaded_in_ui)
+
+        # Initialize recording controls state
+        self.root.after(600, self.update_recording_controls_state)
 
         # Auto-start recording after everything is initialized
         self.root.after(3000, self.auto_start_recording)
@@ -358,6 +365,64 @@ class MicrophoneTranscriberGUI:
 
         self.mic2_log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         mic2_log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def create_recording_controls(self):
+        """Create recording control buttons (Start, Pause/Resume, Stop)"""
+        # Main controls frame
+        controls_frame = tk.Frame(self.root)
+        controls_frame.pack(pady=10, padx=20)
+
+        # Status indicator
+        self.recording_status_label = tk.Label(
+            controls_frame, text="Ready to record", font=("Arial", 10), fg="blue"
+        )
+        self.recording_status_label.pack(pady=5)
+
+        # Buttons frame
+        buttons_frame = tk.Frame(controls_frame)
+        buttons_frame.pack()
+
+        # Start button
+        self.start_btn = tk.Button(
+            buttons_frame,
+            text=t("start_button", "🎤 Start"),
+            command=self.start_recording_button_clicked,
+            font=("Arial", 12, "bold"),
+            bg="#4CAF50",
+            fg="white",
+            padx=20,
+            pady=10,
+            state=tk.NORMAL,
+        )
+        self.start_btn.pack(side=tk.LEFT, padx=5)
+
+        # Pause/Resume button
+        self.pause_btn = tk.Button(
+            buttons_frame,
+            text=t("pause_button", "⏸️ Pause"),
+            command=self.pause_recording_button_clicked,
+            font=("Arial", 12, "bold"),
+            bg="#FF9800",
+            fg="white",
+            padx=20,
+            pady=10,
+            state=tk.DISABLED,
+        )
+        self.pause_btn.pack(side=tk.LEFT, padx=5)
+
+        # Stop button
+        self.stop_btn = tk.Button(
+            buttons_frame,
+            text=t("stop_button", "🎤 Stop"),
+            command=self.stop_recording_button_clicked,
+            font=("Arial", 12, "bold"),
+            bg="#F44336",
+            fg="white",
+            padx=20,
+            pady=10,
+            state=tk.DISABLED,
+        )
+        self.stop_btn.pack(side=tk.LEFT, padx=5)
 
     def create_transcripts_tab(self):
         """Create the transcripts tab showing only the transcribed text"""
@@ -2817,7 +2882,11 @@ class MicrophoneTranscriberGUI:
 
             # Update UI state
             self.is_recording = True
+            self.is_paused = False
             self.status_var.set("Continuous recording active - audio never stops...")
+
+            # Update recording controls
+            self.update_recording_controls_state()
 
             # Start real-time markdown saving
             self.start_realtime_markdown_save()
@@ -2847,10 +2916,12 @@ class MicrophoneTranscriberGUI:
     def stop_realtime_recording(self):
         """Stop real-time recording"""
         self.is_recording = False
+        self.is_paused = False
 
         # Signal all threads to stop
-        for stop_event in self.stop_events:
-            stop_event.set()
+        if hasattr(self, "stop_events") and self.stop_events:
+            for stop_event in self.stop_events:
+                stop_event.set()
 
         # Stop real-time markdown saving
         self.stop_realtime_markdown_save()
@@ -2859,11 +2930,107 @@ class MicrophoneTranscriberGUI:
         self.auto_save_transcripts()
 
         # Update UI
+        self.update_recording_controls_state()
         self.status_var.set("Continuous recording stopped - transcripts auto-saved")
 
         # Refresh files list if files tab exists
         if hasattr(self, "files_listbox"):
             self.refresh_files_list()
+
+    def start_recording_button_clicked(self):
+        """Handle start button click"""
+        self.start_realtime_recording()
+
+    def pause_recording_button_clicked(self):
+        """Handle pause/resume button click"""
+        if self.is_paused:
+            self.resume_recording()
+        else:
+            self.pause_recording()
+
+    def stop_recording_button_clicked(self):
+        """Handle stop button click"""
+        self.stop_realtime_recording()
+
+    def pause_recording(self):
+        """Pause the current recording"""
+        if not self.is_recording:
+            return
+
+        self.is_paused = True
+
+        # Signal all threads to pause
+        if hasattr(self, "stop_events") and self.stop_events:
+            for stop_event in self.stop_events:
+                stop_event.set()
+
+        # Update UI
+        self.update_recording_controls_state()
+        if hasattr(self, "recording_status_label"):
+            self.recording_status_label.config(text="Recording paused", fg="orange")
+        self.status_var.set("Recording paused - audio capture suspended")
+
+    def resume_recording(self):
+        """Resume a paused recording"""
+        if not self.is_recording or not self.is_paused:
+            return
+
+        self.is_paused = False
+
+        # Restart recording with same microphones
+        selected = [idx for var, idx in self.mic_vars if var.get()]
+
+        if len(selected) == 2:
+            # Create new stop events for resumed recording
+            self.stop_events = [threading.Event() for _ in selected]
+            self.recording_threads = []
+
+            # Start recording threads again
+            for i, device_index in enumerate(selected):
+                stop_event = self.stop_events[i]
+                thread = threading.Thread(
+                    target=self.realtime_record_and_transcribe,
+                    args=(device_index, stop_event, selected),
+                    daemon=True,
+                )
+                thread.start()
+                self.recording_threads.append(thread)
+
+            # Update UI
+            self.update_recording_controls_state()
+            if hasattr(self, "recording_status_label"):
+                self.recording_status_label.config(text="Recording resumed", fg="green")
+            self.status_var.set("Recording resumed - audio capture active")
+
+    def update_recording_controls_state(self):
+        """Update the state of recording control buttons"""
+        # Safety check - ensure controls exist
+        if (
+            not hasattr(self, "start_btn")
+            or not hasattr(self, "pause_btn")
+            or not hasattr(self, "stop_btn")
+        ):
+            return
+
+        if not self.is_recording:
+            # Not recording - enable start, disable others
+            self.start_btn.config(state=tk.NORMAL)
+            self.pause_btn.config(state=tk.DISABLED)
+            self.stop_btn.config(state=tk.DISABLED)
+            if hasattr(self, "recording_status_label"):
+                self.recording_status_label.config(text="Ready to record", fg="blue")
+        elif self.is_paused:
+            # Recording paused - disable start, enable resume, enable stop
+            self.start_btn.config(state=tk.DISABLED)
+            self.pause_btn.config(text=t("resume_button", "▶️ Resume"), state=tk.NORMAL)
+            self.stop_btn.config(state=tk.NORMAL)
+        else:
+            # Recording active - disable start, enable pause, enable stop
+            self.start_btn.config(state=tk.DISABLED)
+            self.pause_btn.config(text=t("pause_button", "⏸️ Pause"), state=tk.NORMAL)
+            self.stop_btn.config(state=tk.NORMAL)
+            if hasattr(self, "recording_status_label"):
+                self.recording_status_label.config(text="Recording active", fg="green")
 
     def realtime_record_and_transcribe(
         self, device_index, stop_event, selected_indices

@@ -8,6 +8,8 @@ TRANSLATIONS = {
         # UI Labels
         "app_title": "Meeting Audio Transcriber",
         "start_button": "🎤 Iniciar",
+        "pause_button": "⏸️ Pausar",
+        "resume_button": "▶️ Retomar",
         "stop_button": "🎤 Parar",
         "auto_save_off": "Auto-salvar: DESLIGADO",
         "auto_save_on": "Auto-salvar: LIGADO",
@@ -119,6 +121,8 @@ TRANSLATIONS = {
         # UI Labels
         "app_title": "Meeting Audio Transcriber",
         "start_button": "🎤 Start",
+        "pause_button": "⏸️ Pause",
+        "resume_button": "▶️ Resume",
         "stop_button": "🎤 Stop",
         "auto_save_off": "Auto-save: OFF",
         "auto_save_on": "Auto-save: ON",
