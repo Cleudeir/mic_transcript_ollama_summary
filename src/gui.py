@@ -10,6 +10,9 @@ import tkinter as tk
 from tkinter import messagebox
 from src.capture_audio import get_microphone_list, capture_audio_with_callback
 from src.transcribe_text import transcribe_and_display
+from tkinter import messagebox
+from src.capture_audio import get_microphone_list, capture_audio_with_callback
+from src.transcribe_text import transcribe_and_display
 
 
 class MicrophoneTranscriberGUI:
@@ -72,7 +75,7 @@ class MicrophoneTranscriberGUI:
         # Listen button
         self.listen_btn = tk.Button(
             button_frame,
-            text="🎤 Start Real-time Transcription",
+            text="🎤 Start Continuous Recording & Transcription",
             command=self.toggle_recording,
             font=("Arial", 12, "bold"),
             bg="#4CAF50",
@@ -458,21 +461,40 @@ class MicrophoneTranscriberGUI:
         self.status_var.set("All output cleared")
 
     def transcribe_and_display_separated(self, device_index, audio_data, samplerate, selected_indices):
-        """Custom transcribe function that separates logs and transcripts"""
-        from src.transcribe_text import transcribe_audio
+        """Ultra-fast transcription with minimal blocking for continuous pipeline"""
+        from src.transcribe_text import transcribe_audio_async
         
-        # Add processing log
-        self.add_log_message(device_index, "Processing audio...", selected_indices)
+        # Quick pre-check before processing
+        import numpy as np
+        import time
         
-        # Transcribe the audio
-        transcript = transcribe_audio(audio_data, samplerate, "pt-BR")
+        # Skip silent audio immediately
+        if np.max(np.abs(audio_data)) < 100:
+            return  # Don't even log silent audio to reduce UI updates
         
-        # Display results
-        if transcript.startswith("Could not") or transcript.startswith("Error"):
-            self.add_log_message(device_index, transcript, selected_indices)
-        else:
-            self.add_log_message(device_index, "Transcription completed successfully", selected_indices)
-            self.add_transcript_message(device_index, transcript, selected_indices)
+        start_time = time.time()
+        
+        # Use non-blocking async transcription
+        try:
+            transcript = transcribe_audio_async(audio_data, samplerate, "pt-BR")
+            processing_time = time.time() - start_time
+            
+            # Only update UI for meaningful results
+            if transcript and transcript not in [None, "Transcription timeout"]:
+                if transcript.startswith(("Could not", "Error", "Network error")):
+                    self.add_log_message(device_index, f"⚠️ {transcript} ({processing_time:.1f}s)", selected_indices)
+                else:
+                    # Show successful transcription with minimal logging
+                    self.add_log_message(device_index, f"✅ Transcribed in {processing_time:.1f}s", selected_indices)
+                    self.add_transcript_message(device_index, transcript, selected_indices)
+            else:
+                # Only log timeouts and errors, not empty results
+                if transcript == "Transcription timeout":
+                    self.add_log_message(device_index, f"⏱️ Timeout ({processing_time:.1f}s)", selected_indices)
+                    
+        except Exception as e:
+            # Log exceptions but don't block the pipeline
+            self.add_log_message(device_index, f"❌ Exception: {e}", selected_indices)
 
     def toggle_recording(self):
         """Toggle between start and stop recording"""
@@ -507,8 +529,8 @@ class MicrophoneTranscriberGUI:
             
             # Update UI state
             self.is_recording = True
-            self.listen_btn.config(text="🛑 Stop Recording", bg="#f44336")
-            self.status_var.set("Real-time recording started...")
+            self.listen_btn.config(text="🛑 Stop Continuous Recording", bg="#f44336")
+            self.status_var.set("Continuous recording active - audio never stops...")
             
             # Create stop events for each microphone
             self.stop_events = [threading.Event() for _ in selected]
@@ -526,7 +548,7 @@ class MicrophoneTranscriberGUI:
                 self.recording_threads.append(thread)
                 
                 # Add initial log message
-                self.add_log_message(device_index, f"Started real-time recording from device {device_index}", selected)
+                self.add_log_message(device_index, f"🔴 CONTINUOUS: Non-stop recording and transcription from device {device_index}", selected)
 
     def stop_realtime_recording(self):
         """Stop real-time recording"""
@@ -537,21 +559,89 @@ class MicrophoneTranscriberGUI:
             stop_event.set()
         
         # Update UI
-        self.listen_btn.config(text="🎤 Start Real-time Transcription", bg="#4CAF50")
-        self.status_var.set("Recording stopped")
+        self.listen_btn.config(text="🎤 Start Continuous Recording & Transcription", bg="#4CAF50")
+        self.status_var.set("Continuous recording stopped")
         
         # Add log message
         self.combined_output.insert(tk.END, "\n=== RECORDING STOPPED ===\n\n")
         self.combined_output.see(tk.END)
 
     def realtime_record_and_transcribe(self, device_index, stop_event, selected_indices):
-        """Handle real-time recording and transcription for a specific device"""
+        """Handle real-time recording and transcription with continuous non-blocking pipeline"""
+        
+        # Create a high-performance queue for transcription tasks
+        import queue
+        transcription_queue = queue.Queue(maxsize=10)  # Larger queue to handle bursts
+        
+        # Multiple transcription workers for parallel processing
+        num_workers = 2  # Multiple workers to handle transcription load
+        workers = []
+        
+        def transcription_worker(worker_id):
+            """Process transcription requests in parallel workers"""
+            while not stop_event.is_set():
+                try:
+                    # Get transcription task from queue with short timeout
+                    task = transcription_queue.get(timeout=0.3)
+                    if task is None:  # Shutdown signal
+                        break
+                    
+                    device_idx, audio_data, samplerate, timestamp = task
+                    
+                    # Add processing start log
+                    self.add_log_message(device_idx, f"Worker {worker_id}: Starting transcription...", selected_indices)
+                    
+                    # Use optimized real-time transcription
+                    self.transcribe_and_display_separated(device_idx, audio_data, samplerate, selected_indices)
+                    transcription_queue.task_done()
+                    
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    self.add_log_message(device_index, f"Worker {worker_id} error: {e}", selected_indices)
+        
+        # Start multiple transcription processing workers
+        for i in range(num_workers):
+            worker = threading.Thread(target=transcription_worker, args=(i+1,), daemon=True)
+            worker.start()
+            workers.append(worker)
+        
         def on_audio_chunk(device_idx, audio_data, samplerate):
-            # Use our custom transcribe function for real-time chunks
-            self.transcribe_and_display_separated(device_idx, audio_data, samplerate, selected_indices)
+            """Queue transcription task - completely non-blocking"""
+            import time
+            timestamp = time.time()
+            
+            try:
+                # Try to queue without blocking - if queue is full, drop oldest
+                if transcription_queue.full():
+                    # Remove oldest item to make room
+                    try:
+                        transcription_queue.get_nowait()
+                        transcription_queue.task_done()
+                    except queue.Empty:
+                        pass
+                
+                # Add new transcription task
+                transcription_queue.put((device_idx, audio_data, samplerate, timestamp), block=False)
+                
+            except queue.Full:
+                # Even if we can't queue, don't block audio capture
+                # Just log that we're dropping frames due to processing load
+                self.add_log_message(device_index, "High processing load - dropping frame", selected_indices)
 
-        # Start real-time capture
-        capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_duration=5)
+        # Add initial status
+        self.add_log_message(device_index, f"🎤 Starting continuous audio capture (non-blocking pipeline)", selected_indices)
+        
+        # Start real-time capture with continuous mode (2-second chunks for responsiveness)
+        capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_duration=2)
+        
+        # Signal all transcription workers to shutdown
+        for _ in range(num_workers):
+            transcription_queue.put(None)
+        
+        # Wait for workers to complete with timeout
+        for worker in workers:
+            worker.join(timeout=1.0)
         
         # Add completion message when thread ends
         if not stop_event.is_set():  # If stopped due to error, not user action

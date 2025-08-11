@@ -2,6 +2,7 @@ import sounddevice as sd
 import numpy as np
 import threading
 import tkinter as tk
+import time
 
 
 def is_microphone_active(device_index):
@@ -86,9 +87,10 @@ def capture_audio(device_index, duration=20):
         return None, None
 
 
-def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_duration=5):
+def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_duration=3):
     """
-    Capture audio in real-time chunks for continuous transcription
+    Capture audio in real-time chunks for continuous transcription with continuous streaming
+    Audio capture never pauses - transcription happens in parallel
 
     Args:
         device_index (int): The index of the audio device
@@ -99,26 +101,69 @@ def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_durat
     try:
         samplerate = int(sd.query_devices(device_index)["default_samplerate"])
         chunk_samples = int(chunk_duration * samplerate)
-
-        while not stop_event.is_set():
-            try:
-                # Record a chunk
-                audio_chunk = sd.rec(
-                    chunk_samples,
-                    samplerate=samplerate,
-                    channels=1,
-                    dtype="int16",
-                    device=device_index,
-                )
-                sd.wait()
-
-                # Check if we got meaningful audio (not just silence)
-                if np.max(np.abs(audio_chunk)) > 100:  # Threshold for meaningful audio
-                    on_audio_chunk(device_index, audio_chunk, samplerate)
-
-            except Exception as e:
-                print(f"Error in audio chunk from device {device_index}: {e}")
-                break
+        
+        # Continuous audio buffer - never stops collecting
+        audio_buffer = []
+        buffer_lock = threading.Lock()
+        
+        def audio_callback(indata, frames, time, status):
+            """Callback function for continuous streaming audio input"""
+            if status:
+                print(f"Audio status for device {device_index}: {status}")
+            
+            # Convert to int16 and add to buffer (non-blocking)
+            audio_data = (indata[:, 0] * 32767).astype(np.int16)
+            
+            with buffer_lock:
+                audio_buffer.extend(audio_data)
+        
+        # Start continuous streaming audio input
+        with sd.InputStream(
+            callback=audio_callback, 
+            device=device_index,
+            channels=1, 
+            samplerate=samplerate, 
+            dtype=np.float32,
+            blocksize=512,  # Smaller block size for lower latency
+            latency='low'   # Request low latency mode
+        ):
+            
+            last_chunk_time = 0
+            
+            while not stop_event.is_set():
+                try:
+                    # Check if we have enough audio data for a new chunk
+                    with buffer_lock:
+                        buffer_length = len(audio_buffer)
+                    
+                    if buffer_length >= chunk_samples:
+                        # Extract chunk from buffer without stopping audio capture
+                        with buffer_lock:
+                            audio_chunk = np.array(audio_buffer[:chunk_samples], dtype=np.int16)
+                            # Keep some overlap for better transcription continuity
+                            overlap_samples = chunk_samples // 4  # 25% overlap
+                            audio_buffer = audio_buffer[chunk_samples - overlap_samples:]
+                        
+                        # Check if we got meaningful audio (not just silence)
+                        if np.max(np.abs(audio_chunk)) > 50:
+                            # Process chunk in completely separate thread - never blocks audio
+                            processing_thread = threading.Thread(
+                                target=on_audio_chunk,
+                                args=(device_index, audio_chunk, samplerate),
+                                daemon=True,
+                                name=f"Transcription-{device_index}-{int(time.time())}"
+                            )
+                            processing_thread.start()
+                        
+                        last_chunk_time = time.time()
+                    
+                    # Very small sleep to prevent busy waiting but keep responsiveness
+                    time.sleep(0.05)  # 50ms sleep - audio still captures continuously
+                    
+                except Exception as e:
+                    print(f"Error processing audio chunk from device {device_index}: {e}")
+                    # Don't break - continue capturing audio even if processing fails
+                    time.sleep(0.1)
 
     except Exception as e:
         print(f"Error setting up real-time capture for device {device_index}: {e}")
