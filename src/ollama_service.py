@@ -27,7 +27,7 @@ class OllamaService:
             "model_name", "llama3.2"
         )
         self.base_url = base_url or self.config.get("ollama", {}).get(
-            "base_url", "https://api.apps.tec.br/ollama"
+            "base_url", "http://localhost:11434"
         )
         self.logger = logging.getLogger(__name__)
 

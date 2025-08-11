@@ -27,6 +27,10 @@ class MicrophoneTranscriberGUI:
         self.root = tk.Tk()
         self.root.title("Microphone Selector & Transcriber")
         self.root.geometry("900x700")
+        # Recording state
+        self.is_recording = False
+        # Microphone variables for selection
+        self.mic_vars = []
         # Create menu bar
         # self.setup_menu_bar()
 
@@ -89,6 +93,14 @@ class MicrophoneTranscriberGUI:
 
         # Set up output mapping after tabs are created
         self.setup_output_mapping()
+
+        # Initialize missing components
+        self.config_file = "mic_config.json"
+        self.ollama_service = OllamaService()
+        
+        # Load and ensure main config exists with defaults
+        self.config = self.load_main_config()
+        self.ensure_config_file_exists()
 
         # Status bar (display at bottom)
         self.status_label = tk.Label(
@@ -545,7 +557,7 @@ class MicrophoneTranscriberGUI:
 
         # Microphone Configuration Section
         mic_section = ttk.LabelFrame(
-            scrollable_frame, text="🎤 Microphone Configuration", padding=10
+            scrollable_frame, text="🎤 Microphone Selection", padding=10
         )
         mic_section.pack(fill=tk.X, padx=10, pady=5)
 
@@ -555,19 +567,45 @@ class MicrophoneTranscriberGUI:
             font=("Arial", 10, "bold"),
         ).pack(anchor=tk.W, pady=(0, 5))
 
-        # Container for microphone checkboxes
-        self.config_mic_frame = tk.Frame(mic_section)
-        self.config_mic_frame.pack(fill=tk.X, pady=5)
+        # Container for main microphone checkboxes
+        self.mic_frame = tk.Frame(mic_section)
+        self.mic_frame.pack(fill=tk.X, pady=5)
 
         # Refresh microphones button
         refresh_mic_btn = tk.Button(
             mic_section,
             text="🔄 Refresh Microphones",
-            command=self.refresh_config_microphones,
+            command=self.refresh_microphones,
             bg="#e3f2fd",
             relief="groove",
         )
         refresh_mic_btn.pack(anchor=tk.W, pady=5)
+
+        # Advanced Configuration Section (for the detailed config)
+        advanced_section = ttk.LabelFrame(
+            scrollable_frame, text="🔧 Advanced Configuration", padding=10
+        )
+        advanced_section.pack(fill=tk.X, padx=10, pady=5)
+
+        tk.Label(
+            advanced_section,
+            text="Advanced microphone configuration options:",
+            font=("Arial", 10, "bold"),
+        ).pack(anchor=tk.W, pady=(0, 5))
+
+        # Container for advanced microphone checkboxes
+        self.config_mic_frame = tk.Frame(advanced_section)
+        self.config_mic_frame.pack(fill=tk.X, pady=5)
+
+        # Refresh advanced config button
+        refresh_advanced_btn = tk.Button(
+            advanced_section,
+            text="🔄 Refresh Advanced Config",
+            command=self.refresh_config_microphones,
+            bg="#e3f2fd",
+            relief="groove",
+        )
+        refresh_advanced_btn.pack(anchor=tk.W, pady=5)
 
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
@@ -575,6 +613,9 @@ class MicrophoneTranscriberGUI:
 
         # Load current configuration
         self.refresh_config_microphones()
+
+        # Load microphones for main interface (now in tab)
+        self.load_microphones()
 
     def create_ollama_config_tab(self):
         """Create the Ollama configuration tab"""
@@ -678,11 +719,17 @@ class MicrophoneTranscriberGUI:
         """Load current configuration values into the config tab"""
         try:
             # Load current Ollama URL
-            current_url = self.ollama_service.base_url or "http://localhost:11434"
+            current_url = getattr(self.ollama_service, "base_url", None)
+            if not current_url:
+                current_url = "http://localhost:11434"
+                self.ollama_service.base_url = current_url
             self.ollama_url_var.set(current_url)
 
             # Load current model
-            current_model = self.ollama_service.model_name or "llama3.2"
+            current_model = getattr(self.ollama_service, "model_name", None)
+            if not current_model:
+                current_model = "llama3.2"
+                self.ollama_service.model_name = current_model
             self.model_var.set(current_model)
 
         except Exception as e:
@@ -695,9 +742,12 @@ class MicrophoneTranscriberGUI:
             for widget in self.config_mic_frame.winfo_children():
                 widget.destroy()
 
+            # Show status while loading microphones
+            self.status_var.set("Loading microphones, please wait...")
             # Get current microphones
             mics = get_microphone_list()
             self.config_mic_vars = []
+            self.status_var.set("")
 
             # Load current selection
             current_selection = []
@@ -711,20 +761,20 @@ class MicrophoneTranscriberGUI:
                 pass
 
             # Create checkboxes for each microphone
-            for i, mic in enumerate(mics):
+            for mic_idx, mic_name in mics:
                 var = tk.IntVar()
-                if i in current_selection:
+                if mic_idx in current_selection:
                     var.set(1)
 
                 checkbox = tk.Checkbutton(
                     self.config_mic_frame,
-                    text=f"{i}: {mic}",
+                    text=f"{mic_idx}: {mic_name}",
                     variable=var,
                     command=self.on_microphone_selection_change,
                     wraplength=400,
                 )
                 checkbox.pack(anchor=tk.W, pady=1)
-                self.config_mic_vars.append((i, var, mic))
+                self.config_mic_vars.append((mic_idx, var, mic_name))
 
         except Exception as e:
             self.status_var.set(f"Error refreshing microphones: {e}")
@@ -749,6 +799,41 @@ class MicrophoneTranscriberGUI:
 
             # Update main interface
             self.load_microphones()
+
+        except Exception as e:
+            self.status_var.set(f"Error updating microphone selection: {e}")
+
+    def on_main_microphone_selection_change(self):
+        """Handle microphone selection changes in the main interface"""
+        try:
+            selected_indices = [idx for var, idx in self.mic_vars if var.get()]
+            selected_with_names = []
+            
+            # Get names for selected microphones
+            for idx in selected_indices:
+                for mic_idx, mic_name in self.mics:
+                    if mic_idx == idx:
+                        selected_with_names.append((idx, mic_name))
+                        break
+
+            # Limit to 2 selections
+            if len(selected_with_names) > 2:
+                # Uncheck the last selected (allow only 2)
+                for var, idx in self.mic_vars:
+                    if var.get() and idx not in [s[0] for s in selected_with_names[:2]]:
+                        var.set(0)
+                selected_with_names = selected_with_names[:2]
+
+            # Save microphone configuration
+            self.save_microphone_config(selected_with_names)
+            
+            # Update status
+            if len(selected_with_names) == 2:
+                self.status_var.set(f"Selected: {selected_with_names[0][1][:20]}... & {selected_with_names[1][1][:20]}...")
+            elif len(selected_with_names) == 1:
+                self.status_var.set(f"Selected: {selected_with_names[0][1][:30]}... (select 1 more)")
+            else:
+                self.status_var.set("Select exactly 2 microphones to start recording")
 
         except Exception as e:
             self.status_var.set(f"Error updating microphone selection: {e}")
@@ -1518,6 +1603,17 @@ class MicrophoneTranscriberGUI:
             "language": "pt-BR",
         }
 
+    def ensure_config_file_exists(self):
+        """Ensure config.json exists with default values"""
+        config_path = "config.json"
+        if not os.path.exists(config_path):
+            try:
+                with open(config_path, "w", encoding="utf-8") as f:
+                    json.dump(self.config, f, indent=4, ensure_ascii=False)
+                self.status_var.set("Created default config.json with Ollama URL: http://localhost:11434")
+            except Exception as e:
+                self.status_var.set(f"Error creating config file: {e}")
+
     def load_mic_preferences(self):
         """Load previously saved microphone preferences"""
         if not os.path.exists(self.config_file):
@@ -1646,9 +1742,13 @@ class MicrophoneTranscriberGUI:
                     variable=var,
                     font=("Arial", 9),
                     anchor=tk.W,
+                    command=self.on_main_microphone_selection_change,
                 )
                 cb.pack(anchor="w", pady=2)
                 self.mic_vars.append((var, idx))
+
+            # Load saved preferences
+            self.load_mic_preferences()
 
             self.status_var.set(f"Found {len(self.mics)} microphone(s)")
 
