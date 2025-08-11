@@ -1,6 +1,6 @@
 {
     "ollama": {
-        "base_url": "https://api.apps.tec.br/ollama",
+        "base_url": "api.apps.tec.br/ollama",
         "model_name": "test-model",
         "temperature": 0.3,
         "top_p": 0.8,

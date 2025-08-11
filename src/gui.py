@@ -442,6 +442,7 @@ class MicrophoneTranscriberGUI:
         )
         self.transcript_files_listbox.configure(yscrollcommand=transcript_scrollbar.set)
         self.transcript_files_listbox.bind("<Double-Button-1>", self.open_selected_transcript_file)
+        self.transcript_files_listbox.bind("<<ListboxSelect>>", self.on_transcript_file_select)
 
         self.transcript_files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         transcript_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -459,23 +460,40 @@ class MicrophoneTranscriberGUI:
         )
         refresh_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        open_transcript_btn = tk.Button(
-            transcript_buttons_frame,
+        # File operation buttons (shown when file is selected)
+        self.transcript_file_ops_frame = tk.Frame(transcript_buttons_frame)
+        self.transcript_file_ops_frame.pack(side=tk.LEFT, padx=(10, 0))
+
+        self.open_transcript_btn = tk.Button(
+            self.transcript_file_ops_frame,
             text="📖 Open",
             command=self.open_selected_transcript_file,
             bg="#e8f5e8",
             relief="groove",
+            state="disabled"
         )
-        open_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
+        self.open_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        delete_transcript_btn = tk.Button(
-            transcript_buttons_frame,
-            text="🗑️ Delete",
-            command=self.delete_selected_transcript_file,
-            bg="#ffebee",
+        self.save_transcript_as_btn = tk.Button(
+            self.transcript_file_ops_frame,
+            text="� Save As",
+            command=self.save_transcript_as,
+            bg="#fff3e0",
             relief="groove",
+            state="disabled"
         )
-        delete_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
+        self.save_transcript_as_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.regenerate_ata_btn = tk.Button(
+            self.transcript_file_ops_frame,
+            text="🤖 Regenerate ATA",
+            command=self.regenerate_ata_from_selected,
+            bg="#4CAF50",
+            fg="white",
+            relief="groove",
+            state="disabled"
+        )
+        self.regenerate_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         open_transcript_folder_btn = tk.Button(
             transcript_buttons_frame,
@@ -576,6 +594,7 @@ class MicrophoneTranscriberGUI:
         )
         self.ata_files_listbox.configure(yscrollcommand=ata_scrollbar.set)
         self.ata_files_listbox.bind("<Double-Button-1>", self.open_selected_ata_file)
+        self.ata_files_listbox.bind("<<ListboxSelect>>", self.on_ata_file_select)
 
         self.ata_files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         ata_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -593,23 +612,29 @@ class MicrophoneTranscriberGUI:
         )
         refresh_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        open_ata_btn = tk.Button(
-            ata_buttons_frame,
+        # File operation buttons (shown when file is selected)
+        self.ata_file_ops_frame = tk.Frame(ata_buttons_frame)
+        self.ata_file_ops_frame.pack(side=tk.LEFT, padx=(10, 0))
+
+        self.open_ata_btn = tk.Button(
+            self.ata_file_ops_frame,
             text="📖 Open",
             command=self.open_selected_ata_file,
             bg="#e8f5e8",
             relief="groove",
+            state="disabled"
         )
-        open_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
+        self.open_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        delete_ata_btn = tk.Button(
-            ata_buttons_frame,
-            text="🗑️ Delete",
-            command=self.delete_selected_ata_file,
-            bg="#ffebee",
+        self.save_ata_as_btn = tk.Button(
+            self.ata_file_ops_frame,
+            text="� Save As",
+            command=self.save_ata_as,
+            bg="#fff3e0",
             relief="groove",
+            state="disabled"
         )
-        delete_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
+        self.save_ata_as_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         open_ata_folder_btn = tk.Button(
             ata_buttons_frame,
@@ -1480,6 +1505,169 @@ class MicrophoneTranscriberGUI:
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open ATA folder: {e}")
+
+    # File Selection Event Handlers
+    def on_transcript_file_select(self, event=None):
+        """Handle transcript file selection"""
+        try:
+            selection = self.transcript_files_listbox.curselection()
+            if selection:
+                # Enable file operation buttons
+                self.open_transcript_btn.config(state="normal")
+                self.save_transcript_as_btn.config(state="normal")
+                self.regenerate_ata_btn.config(state="normal")
+            else:
+                # Disable file operation buttons
+                self.open_transcript_btn.config(state="disabled")
+                self.save_transcript_as_btn.config(state="disabled")
+                self.regenerate_ata_btn.config(state="disabled")
+        except Exception as e:
+            self.status_var.set(f"Error handling transcript selection: {e}")
+
+    def on_ata_file_select(self, event=None):
+        """Handle ATA file selection"""
+        try:
+            selection = self.ata_files_listbox.curselection()
+            if selection:
+                # Enable file operation buttons
+                self.open_ata_btn.config(state="normal")
+                self.save_ata_as_btn.config(state="normal")
+                
+                # Update info label with file details
+                filename = self.ata_files_listbox.get(selection[0])
+                ata_dir = os.path.join(os.path.dirname(__file__), "output", "ata")
+                file_path = os.path.join(ata_dir, filename)
+                
+                if os.path.exists(file_path):
+                    file_size = os.path.getsize(file_path)
+                    mod_time = os.path.getmtime(file_path)
+                    mod_time_str = datetime.datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    self.ata_info_label.config(
+                        text=f"File: {filename}\nSize: {file_size} bytes\nModified: {mod_time_str}",
+                        fg="blue"
+                    )
+            else:
+                # Disable file operation buttons
+                self.open_ata_btn.config(state="disabled")
+                self.save_ata_as_btn.config(state="disabled")
+                self.ata_info_label.config(
+                    text="Select an ATA file to view information",
+                    fg="gray"
+                )
+        except Exception as e:
+            self.status_var.set(f"Error handling ATA selection: {e}")
+
+    # Save As Methods
+    def save_transcript_as(self):
+        """Save selected transcript file to a different location"""
+        try:
+            selection = self.transcript_files_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a transcript file first")
+                return
+
+            filename = self.transcript_files_listbox.get(selection[0])
+            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            source_path = os.path.join(transcript_dir, filename)
+
+            if not os.path.exists(source_path):
+                messagebox.showerror("Error", f"File not found: {filename}")
+                return
+
+            # Ask user where to save
+            save_path = filedialog.asksaveasfilename(
+                title="Save Transcript As",
+                defaultextension=".md",
+                filetypes=[
+                    ("Markdown files", "*.md"),
+                    ("Text files", "*.txt"),
+                    ("All files", "*.*"),
+                ],
+                initialfilename=filename
+            )
+
+            if save_path:
+                import shutil
+                shutil.copy2(source_path, save_path)
+                self.status_var.set(f"Transcript saved to: {os.path.basename(save_path)}")
+                messagebox.showinfo("Success", f"File saved successfully to:\n{save_path}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save transcript: {e}")
+
+    def save_ata_as(self):
+        """Save selected ATA file to a different location"""
+        try:
+            selection = self.ata_files_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select an ATA file first")
+                return
+
+            filename = self.ata_files_listbox.get(selection[0])
+            ata_dir = os.path.join(os.path.dirname(__file__), "output", "ata")
+            source_path = os.path.join(ata_dir, filename)
+
+            if not os.path.exists(source_path):
+                messagebox.showerror("Error", f"File not found: {filename}")
+                return
+
+            # Ask user where to save
+            save_path = filedialog.asksaveasfilename(
+                title="Save ATA As",
+                defaultextension=".md",
+                filetypes=[
+                    ("Markdown files", "*.md"),
+                    ("Text files", "*.txt"),
+                    ("All files", "*.*"),
+                ],
+                initialfilename=filename
+            )
+
+            if save_path:
+                import shutil
+                shutil.copy2(source_path, save_path)
+                self.status_var.set(f"ATA saved to: {os.path.basename(save_path)}")
+                messagebox.showinfo("Success", f"File saved successfully to:\n{save_path}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save ATA: {e}")
+
+    def regenerate_ata_from_selected(self):
+        """Regenerate ATA from selected transcript file"""
+        try:
+            selection = self.transcript_files_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a transcript file first")
+                return
+
+            filename = self.transcript_files_listbox.get(selection[0])
+            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            transcript_path = os.path.join(transcript_dir, filename)
+
+            if not os.path.exists(transcript_path):
+                messagebox.showerror("Error", f"File not found: {filename}")
+                return
+
+            # Confirm regeneration
+            if not messagebox.askyesno(
+                "Confirm Regeneration", 
+                f"Generate new ATA from '{filename}'?\n\nThis will create a new ATA file."
+            ):
+                return
+
+            # Set the selected file path and generate ATA
+            self.selected_transcript_path = transcript_path
+            self.selected_transcript_var.set(filename)
+            self.transcript_ata_status_label.config(
+                text="File selected. Generating ATA...", fg="orange"
+            )
+            
+            # Generate ATA
+            self.generate_ata_from_file()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to regenerate ATA: {e}")
 
     def select_transcript_file(self):
         """Select a transcript file for ATA generation"""
