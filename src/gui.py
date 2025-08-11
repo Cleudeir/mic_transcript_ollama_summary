@@ -9,15 +9,13 @@ from src.capture_audio import (
     capture_audio_with_callback,
     capture_audio_realtime,
 )
-from src.transcribe_text import transcribe_and_display
 import tkinter as tk
 from tkinter import messagebox
 from src.capture_audio import get_microphone_list, capture_audio_with_callback
-from src.transcribe_text import transcribe_and_display
 from tkinter import messagebox
 from src.capture_audio import get_microphone_list, capture_audio_with_callback
-from src.transcribe_text import transcribe_and_display
 from src.ollama_service import OllamaService
+from src.translations import get_translation_manager, set_global_language, t
 
 
 class MicrophoneTranscriberGUI:
@@ -25,7 +23,6 @@ class MicrophoneTranscriberGUI:
 
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Microphone Selector & Transcriber")
         self.root.geometry("900x700")
 
         # Initialize configuration early
@@ -44,15 +41,26 @@ class MicrophoneTranscriberGUI:
         # Create menu bar
         # self.setup_menu_bar()
 
-        # Title
-        title_label = tk.Label(
-            self.root, text="Meeting Audio Transcriber", font=("Arial", 16, "bold")
-        )
-        title_label.pack(pady=10)
-
         # Status bar variable (must be initialized before usage)
         self.status_var = tk.StringVar()
         self.status_var.set("")
+
+        # Load and ensure main config exists with defaults (need this before setting title)
+        self.config = self.load_main_config()
+        self.ensure_config_file_exists()
+
+        # Initialize translation system with language from config
+        set_global_language(self.config.get("language", "pt-BR"))
+        self.translation_manager = get_translation_manager()
+        
+        # Set window title using translation
+        self.root.title(t("app_title", "Meeting Audio Transcriber"))
+
+        # Title
+        title_label = tk.Label(
+            self.root, text=t("app_title", "Meeting Audio Transcriber"), font=("Arial", 16, "bold")
+        )
+        title_label.pack(pady=10)
 
         # Control buttons frame (moved up for better layout)
         button_frame = tk.Frame(self.root)
@@ -61,7 +69,7 @@ class MicrophoneTranscriberGUI:
         # Listen button
         self.listen_btn = tk.Button(
             button_frame,
-            text="🎤 Start",
+            text=t("start_button", "🎤 Start"),
             command=self.toggle_recording,
             font=("Arial", 12, "bold"),
             bg="#4CAF50",
@@ -74,7 +82,7 @@ class MicrophoneTranscriberGUI:
         # Auto-save status label
         self.auto_save_label = tk.Label(
             button_frame,
-            text="Auto-save: OFF",
+            text=t("auto_save_off", "Auto-save: OFF"),
             font=("Arial", 8),
             fg="gray",
         )
@@ -83,7 +91,7 @@ class MicrophoneTranscriberGUI:
         # Ollama status label
         self.ollama_status_label = tk.Label(
             button_frame,
-            text="🌐 Ollama Remote: Checking...",
+            text=t("ollama_checking", "🌐 Ollama Remote: Checking..."),
             font=("Arial", 8),
             fg="orange",
         )
@@ -108,10 +116,6 @@ class MicrophoneTranscriberGUI:
         # Initialize missing components
         self.ollama_service = OllamaService()
 
-        # Load and ensure main config exists with defaults
-        self.config = self.load_main_config()
-        self.ensure_config_file_exists()
-
         # Migrate old mic_config.json to unified config.json if needed
         self.migrate_old_mic_config()
 
@@ -130,56 +134,56 @@ class MicrophoneTranscriberGUI:
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
         settings_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="⚙️ Settings", menu=settings_menu)
+        menubar.add_cascade(label=t("menu_settings", "⚙️ Settings"), menu=settings_menu)
 
         settings_menu.add_command(
-            label="🌐 Language Settings", command=self.open_language_settings
+            label=t("menu_language", "🌐 Language Settings"), command=self.open_language_settings
         )
         settings_menu.add_command(
-            label="🔊 Audio Settings", command=self.open_audio_settings
-        )
-        settings_menu.add_separator()
-        settings_menu.add_command(
-            label="🤖 Auto-generate Ata", command=self.toggle_auto_ata_generation
+            label=t("menu_audio", "🔊 Audio Settings"), command=self.open_audio_settings
         )
         settings_menu.add_separator()
         settings_menu.add_command(
-            label="📊 Performance Monitor", command=self.toggle_performance_monitor
+            label=t("menu_auto_ata", "🤖 Auto-generate Ata"), command=self.toggle_auto_ata_generation
+        )
+        settings_menu.add_separator()
+        settings_menu.add_command(
+            label=t("menu_performance", "📊 Performance Monitor"), command=self.toggle_performance_monitor
         )
 
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="📁 File", menu=file_menu)
+        menubar.add_cascade(label=t("menu_file", "📁 File"), menu=file_menu)
 
         file_menu.add_command(
-            label="📄 Open Transcript Folder", command=self.open_transcript_folder
+            label=t("menu_open_transcript_folder", "📄 Open Transcript Folder"), command=self.open_transcript_folder
         )
         file_menu.add_command(
-            label="📋 View All Transcripts", command=self.view_all_transcripts
+            label=t("menu_view_transcripts", "📋 View All Transcripts"), command=self.view_all_transcripts
         )
         file_menu.add_separator()
         file_menu.add_command(
-            label="🤖 Generate Meeting Minutes",
+            label=t("menu_generate_minutes", "🤖 Generate Meeting Minutes"),
             command=self.generate_meeting_minutes_dialog,
         )
-        file_menu.add_command(label="📝 View All Atas", command=self.view_all_atas)
+        file_menu.add_command(label=t("menu_view_atas", "📝 View All Atas"), command=self.view_all_atas)
         file_menu.add_separator()
         file_menu.add_command(
-            label="🔄 Reset Application", command=self.reset_application
+            label=t("menu_reset", "🔄 Reset Application"), command=self.reset_application
         )
         file_menu.add_separator()
-        file_menu.add_command(label="❌ Exit", command=self.on_closing)
+        file_menu.add_command(label=t("menu_exit", "❌ Exit"), command=self.on_closing)
 
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="❓ Help", menu=help_menu)
+        menubar.add_cascade(label=t("menu_help", "❓ Help"), menu=help_menu)
 
-        help_menu.add_command(label="📖 User Guide", command=self.show_user_guide)
+        help_menu.add_command(label=t("menu_user_guide", "📖 User Guide"), command=self.show_user_guide)
         help_menu.add_command(
-            label="🔧 Troubleshooting", command=self.show_troubleshooting
+            label=t("menu_troubleshooting", "🔧 Troubleshooting"), command=self.show_troubleshooting
         )
         help_menu.add_separator()
-        help_menu.add_command(label="ℹ️ About", command=self.show_about)
+        help_menu.add_command(label=t("menu_about", "ℹ️ About"), command=self.show_about)
 
     def open_mic_config_dialog(self):
         """Open microphone configuration dialog"""
@@ -318,7 +322,7 @@ class MicrophoneTranscriberGUI:
     def create_combined_tab(self):
         """Create the combined view tab showing both logs and transcripts"""
         combined_frame = ttk.Frame(self.notebook)
-        self.notebook.add(combined_frame, text="📊 Combined View")
+        self.notebook.add(combined_frame, text=t("tab_combined", "📊 Combined View"))
 
         # Combined output area
         combined_text_frame = tk.Frame(combined_frame)
@@ -338,7 +342,7 @@ class MicrophoneTranscriberGUI:
     def create_logs_tab(self):
         """Create the logs tab showing system messages and status"""
         logs_frame = ttk.Frame(self.notebook)
-        self.notebook.add(logs_frame, text="📝 System Logs")
+        self.notebook.add(logs_frame, text=t("tab_logs", "📝 System Logs"))
 
         # Create paned window for two microphones
         logs_paned = ttk.PanedWindow(logs_frame, orient=tk.HORIZONTAL)
@@ -373,7 +377,7 @@ class MicrophoneTranscriberGUI:
     def create_transcripts_tab(self):
         """Create the transcripts tab showing only the transcribed text"""
         transcripts_frame = ttk.Frame(self.notebook)
-        self.notebook.add(transcripts_frame, text="📄 Transcripts Only")
+        self.notebook.add(transcripts_frame, text=t("tab_transcripts", "📄 Transcripts Only"))
 
         # Create paned window for two microphones
         transcripts_paned = ttk.PanedWindow(transcripts_frame, orient=tk.HORIZONTAL)
@@ -510,7 +514,7 @@ class MicrophoneTranscriberGUI:
     def create_ata_files_tab(self):
         """Create the ATA summary files management tab"""
         ata_files_frame = ttk.Frame(self.notebook)
-        self.notebook.add(ata_files_frame, text="📊 ATA Summary")
+        self.notebook.add(ata_files_frame, text=t("tab_ata_files", "� ATA Files"))
 
         # Main container
         main_container = tk.Frame(ata_files_frame)
@@ -605,7 +609,7 @@ class MicrophoneTranscriberGUI:
     def create_mic_config_tab(self):
         """Create the microphone configuration tab"""
         mic_config_frame = ttk.Frame(self.notebook)
-        self.notebook.add(mic_config_frame, text="🎤 Microphone Selection")
+        self.notebook.add(mic_config_frame, text=t("tab_mic_config", "🎤 Microphone Configuration"))
 
         # Create main container with scrollable frame
         canvas = tk.Canvas(mic_config_frame)
@@ -655,7 +659,7 @@ class MicrophoneTranscriberGUI:
     def create_ollama_config_tab(self):
         """Create the Ollama configuration tab"""
         ollama_config_frame = ttk.Frame(self.notebook)
-        self.notebook.add(ollama_config_frame, text="🤖 Ollama Config")
+        self.notebook.add(ollama_config_frame, text=t("tab_ollama_config", "🤖 Ollama Configuration"))
 
         # Create main container with scrollable frame
         canvas = tk.Canvas(ollama_config_frame)
@@ -1653,7 +1657,7 @@ class MicrophoneTranscriberGUI:
             self.root.update_idletasks()
 
             if not self.ollama_service.is_ollama_available():
-                self.status_var.set("❌ Ollama service not available")
+                self.status_var.set(t("ollama_service_unavailable", "❌ Ollama service not available"))
                 messagebox.showerror(
                     "Connection Error", 
                     f"Cannot connect to Ollama service at {self.ollama_service.base_url}\n\n"
@@ -1953,7 +1957,7 @@ class MicrophoneTranscriberGUI:
 
             # Update UI
             self.auto_save_label.config(
-                text=f"Auto-save: ON ({os.path.basename(self.markdown_file_path)})",
+                text=f"{t('auto_save_on', 'Auto-save: ON')} ({os.path.basename(self.markdown_file_path)})",
                 fg="green",
             )
             self.status_var.set(f"Real-time saving to: {self.markdown_file_path}")
@@ -1987,7 +1991,7 @@ class MicrophoneTranscriberGUI:
                 self.markdown_file = None
 
                 # Update UI
-                self.auto_save_label.config(text="Auto-save: OFF", fg="gray")
+                self.auto_save_label.config(text=t("auto_save_off", "Auto-save: OFF"), fg="gray")
                 self.status_var.set(f"Session saved to: {self.markdown_file_path}")
 
                 # Ask user if they want to generate meeting minutes with Ollama
@@ -2377,7 +2381,7 @@ class MicrophoneTranscriberGUI:
 
             # Update UI state
             self.is_recording = True
-            self.listen_btn.config(text="🛑 Stop", bg="#f44336")
+            self.listen_btn.config(text=t("stop_button", "🛑 Stop"), bg="#f44336")
             self.status_var.set("Continuous recording active - audio never stops...")
 
             # Start real-time markdown saving
@@ -2420,7 +2424,7 @@ class MicrophoneTranscriberGUI:
         self.auto_save_transcripts()
 
         # Update UI
-        self.listen_btn.config(text="🎤 Start", bg="#4CAF50")
+        self.listen_btn.config(text=t("start_button", "🎤 Start"), bg="#4CAF50")
         self.status_var.set("Continuous recording stopped - transcripts auto-saved")
 
         # Add log message
@@ -3106,10 +3110,136 @@ class MicrophoneTranscriberGUI:
     # Placeholder functions for other menu items
     def open_language_settings(self):
         """Open language settings dialog"""
-        messagebox.showinfo(
-            "Language Settings",
-            "Language settings dialog will be implemented in future update.",
+        from src.translations import get_translation_manager, set_global_language
+        
+        # Create language settings window
+        lang_window = tk.Toplevel(self.root)
+        lang_window.title("Language Settings")
+        lang_window.geometry("400x300")
+        lang_window.resizable(False, False)
+        
+        # Make window modal
+        lang_window.transient(self.root)
+        lang_window.grab_set()
+        
+        # Center the window
+        lang_window.geometry(
+            "+%d+%d" % (self.root.winfo_rootx() + 100, self.root.winfo_rooty() + 100)
         )
+        
+        # Get translation manager
+        tm = get_translation_manager()
+        
+        # Title
+        title_label = tk.Label(
+            lang_window, 
+            text="🌐 Language Settings", 
+            font=("Arial", 14, "bold")
+        )
+        title_label.pack(pady=20)
+        
+        # Current language display
+        current_frame = tk.Frame(lang_window)
+        current_frame.pack(pady=10, padx=20, fill=tk.X)
+        
+        current_label = tk.Label(
+            current_frame, 
+            text="Current Language:", 
+            font=("Arial", 10, "bold")
+        )
+        current_label.pack(anchor=tk.W)
+        
+        current_value = tk.Label(
+            current_frame, 
+            text=tm.get_language_name(self.config.get("language", "pt-BR")),
+            font=("Arial", 10),
+            fg="blue"
+        )
+        current_value.pack(anchor=tk.W, pady=(5, 0))
+        
+        # Language selection
+        select_frame = tk.Frame(lang_window)
+        select_frame.pack(pady=20, padx=20, fill=tk.X)
+        
+        select_label = tk.Label(
+            select_frame, 
+            text="Select Language:", 
+            font=("Arial", 10, "bold")
+        )
+        select_label.pack(anchor=tk.W)
+        
+        # Language variable
+        selected_language = tk.StringVar(value=self.config.get("language", "pt-BR"))
+        
+        # Create radio buttons for each language
+        for lang_code, lang_name in tm.get_available_languages().items():
+            radio = tk.Radiobutton(
+                select_frame,
+                text=f"{lang_name} ({lang_code})",
+                variable=selected_language,
+                value=lang_code,
+                font=("Arial", 10)
+            )
+            radio.pack(anchor=tk.W, pady=2)
+        
+        # Button frame
+        button_frame = tk.Frame(lang_window)
+        button_frame.pack(pady=30, padx=20, fill=tk.X)
+        
+        def save_language():
+            """Save the selected language"""
+            new_language = selected_language.get()
+            try:
+                # Update config
+                self.config["language"] = new_language
+                self.save_main_config()
+                
+                # Update global translation manager
+                set_global_language(new_language)
+                
+                # Show success message
+                messagebox.showinfo(
+                    "Language Changed",
+                    "Language changed successfully! Please restart the application to see all changes.",
+                    parent=lang_window
+                )
+                
+                lang_window.destroy()
+                
+            except Exception as e:
+                messagebox.showerror(
+                    "Error",
+                    f"Error saving language configuration: {str(e)}",
+                    parent=lang_window
+                )
+        
+        def cancel_settings():
+            """Cancel and close dialog"""
+            lang_window.destroy()
+        
+        # Save button
+        save_btn = tk.Button(
+            button_frame,
+            text="💾 Save",
+            command=save_language,
+            font=("Arial", 10, "bold"),
+            bg="#4CAF50",
+            fg="white",
+            padx=20,
+            pady=5
+        )
+        save_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Cancel button
+        cancel_btn = tk.Button(
+            button_frame,
+            text="❌ Cancel",
+            command=cancel_settings,
+            font=("Arial", 10),
+            padx=20,
+            pady=5
+        )
+        cancel_btn.pack(side=tk.LEFT)
 
     def open_audio_settings(self):
         """Open audio settings dialog"""
@@ -3260,32 +3390,32 @@ with focus on continuous, uninterrupted operation.
                 if self.ollama_available:
                     if self.ollama_service.is_model_available():
                         self._safe_update_ollama_status(
-                            "🌐 Ollama Remote: Ready", "green"
+                            t("ollama_ready", "🌐 Ollama Remote: Ready"), "green"
                         )
                     else:
                         self._safe_update_ollama_status(
-                            "🌐 Ollama Remote: Downloading model...", "orange"
+                            t("ollama_downloading", "🌐 Ollama Remote: Downloading model..."), "orange"
                         )
                         # Try to pull the model
                         if not self.is_shutting_down:
                             success = self.ollama_service.pull_model()
                             if not self.is_shutting_down and success:
                                 self._safe_update_ollama_status(
-                                    "🌐 Ollama Remote: Ready", "green"
+                                    t("ollama_ready", "🌐 Ollama Remote: Ready"), "green"
                                 )
                             elif not self.is_shutting_down:
                                 self._safe_update_ollama_status(
-                                    "🌐 Ollama Remote: Model download failed", "red"
+                                    t("ollama_download_failed", "🌐 Ollama Remote: Model download failed"), "red"
                                 )
                 else:
                     self._safe_update_ollama_status(
-                        "🌐 Ollama Remote: Not available", "red"
+                        t("ollama_unavailable", "🌐 Ollama Remote: Not available"), "red"
                     )
             except Exception as e:
                 if not self.is_shutting_down:
                     self.ollama_available = False
                     self._safe_update_ollama_status(
-                        "🌐 Ollama Remote: Connection Error", "red"
+                        t("ollama_connection_error", "🌐 Ollama Remote: Connection Error"), "red"
                     )
                     print(f"Ollama check failed: {e}")
 
@@ -3436,7 +3566,7 @@ with focus on continuous, uninterrupted operation.
 
                 # Generate meeting minutes
                 result = self.ollama_service.generate_and_save_minutes(
-                    transcript_file_path, output_file_path, language="pt-BR"
+                    transcript_file_path, output_file_path, language=self.config.get("language", "pt-BR")
                 )
 
                 if result["success"]:
@@ -3533,7 +3663,7 @@ with focus on continuous, uninterrupted operation.
 
                 # Generate meeting minutes
                 result = self.ollama_service.generate_and_save_minutes(
-                    self.markdown_file_path, output_file_path, language="pt-BR"
+                    self.markdown_file_path, output_file_path, language=self.config.get("language", "pt-BR")
                 )
 
                 if result["success"]:
