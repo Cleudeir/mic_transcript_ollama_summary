@@ -32,7 +32,7 @@ class OllamaService:
         self.logger = logging.getLogger(__name__)
 
         # Configure Ollama client with custom base URL and timeout
-        self.client = ollama.Client(host=self.base_url, timeout=30)
+        self.client = ollama.Client(host=self.base_url, timeout=3000)
 
     def _load_config(self) -> dict:
         """Load configuration from config.json file"""
