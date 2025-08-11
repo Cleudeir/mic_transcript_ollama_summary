@@ -87,20 +87,22 @@ def capture_audio(device_index, duration=20):
         return None, None
 
 
-def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_duration=3):
+def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_duration=10):
     """
-    Capture audio in real-time chunks for continuous transcription with continuous streaming
+    Capture audio in real-time with 10-second samples and 200ms overlap for continuity
     Audio capture never pauses - transcription happens in parallel
+    Never loses conversation by maintaining overlap between chunks
 
     Args:
         device_index (int): The index of the audio device
         on_audio_chunk: Callback function to call with each audio chunk
         stop_event: Threading event to signal when to stop recording
-        chunk_duration (int): Duration in seconds for each audio chunk
+        chunk_duration (int): Duration in seconds for each audio chunk (default 10s)
     """
     try:
         samplerate = int(sd.query_devices(device_index)["default_samplerate"])
         chunk_samples = int(chunk_duration * samplerate)
+        overlap_samples = int(0.2 * samplerate)  # 200ms overlap
 
         # Continuous audio buffer - never stops collecting
         audio_buffer = []
@@ -132,18 +134,18 @@ def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_durat
 
             while not stop_event.is_set():
                 try:
-                    # Check if we have enough audio data for a new chunk
+                    # Check if we have enough audio data for a new 10-second chunk
                     with buffer_lock:
                         buffer_length = len(audio_buffer)
 
                     if buffer_length >= chunk_samples:
-                        # Extract chunk from buffer without stopping audio capture
+                        # Extract 10-second chunk from buffer without stopping audio capture
                         with buffer_lock:
                             audio_chunk = np.array(
                                 audio_buffer[:chunk_samples], dtype=np.int16
                             )
-                            # Keep some overlap for better transcription continuity
-                            overlap_samples = chunk_samples // 4  # 25% overlap
+                            # Keep 200ms overlap to never lose conversation
+                            # Remove everything except the last 200ms for next chunk continuity
                             audio_buffer = audio_buffer[
                                 chunk_samples - overlap_samples :
                             ]

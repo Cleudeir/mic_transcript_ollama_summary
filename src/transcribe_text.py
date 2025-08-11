@@ -14,6 +14,9 @@ _recognizer.dynamic_energy_threshold = True
 _recognizer.pause_threshold = 0.3  # Shorter pause threshold for real-time
 _recognizer.phrase_threshold = 0.2  # Shorter phrase threshold
 
+# Set operation timeout for longer audio chunks (10 seconds + processing time)
+_recognizer.operation_timeout = 15  # 15 seconds total timeout for 10s chunks
+
 
 def transcribe_audio(audio_data, samplerate, language="pt-BR"):
     """
@@ -34,7 +37,7 @@ def transcribe_audio(audio_data, samplerate, language="pt-BR"):
         audio_bytes = audio_data.tobytes()
         audio_data_sr = sr.AudioData(audio_bytes, samplerate, 2)
 
-        # Perform transcription
+        # Perform transcription with extended timeout for longer chunks
         text = _recognizer.recognize_google(audio_data_sr, language=language)
         return text
     except sr.UnknownValueError:
@@ -68,14 +71,15 @@ def transcribe_audio_realtime(audio_data, samplerate, language="pt-BR"):
         audio_bytes = audio_data.tobytes()
         audio_data_sr = sr.AudioData(audio_bytes, samplerate, 2)
 
-        # Perform transcription with timeout for real-time
+        # Perform transcription with extended timeout for 10-second chunks
         start_time = time.time()
+        # Use longer timeout for 10-second audio chunks
         text = _recognizer.recognize_google(audio_data_sr, language=language)
 
         # Log processing time for debugging
         processing_time = time.time() - start_time
-        if processing_time > 2.0:  # Log if transcription takes too long
-            print(f"Slow transcription: {processing_time:.2f}s")
+        if processing_time > 5.0:  # Log if transcription takes longer than 5 seconds
+            print(f"Slow transcription for 10s chunk: {processing_time:.2f}s")
 
         return text
     except sr.UnknownValueError:
@@ -100,7 +104,7 @@ def transcribe_audio_async(audio_data, samplerate, language="pt-BR"):
         return None
 
     def transcribe_worker():
-        """Fast transcription worker with timeout"""
+        """Fast transcription worker with extended timeout for 10s chunks"""
         global _recognizer
 
         try:
@@ -108,10 +112,10 @@ def transcribe_audio_async(audio_data, samplerate, language="pt-BR"):
             audio_bytes = audio_data.tobytes()
             audio_data_sr = sr.AudioData(audio_bytes, samplerate, 2)
 
-            # Use optimized recognizer settings for speed
-            _recognizer.operation_timeout = 2.0  # Quick timeout for real-time
+            # Use longer timeout for 10-second audio chunks
+            _recognizer.operation_timeout = 15.0  # Extended timeout for 10s chunks
 
-            # Perform transcription
+            # Perform transcription with extended timeout
             text = _recognizer.recognize_google(audio_data_sr, language=language)
             return text
 
@@ -126,11 +130,11 @@ def transcribe_audio_async(audio_data, samplerate, language="pt-BR"):
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(transcribe_worker)
         try:
-            # Wait for result with aggressive timeout for real-time performance
-            result = future.result(timeout=2.5)  # 2.5 second max wait
+            # Wait for result with extended timeout for 10-second chunks
+            result = future.result(timeout=20.0)  # 20 second max wait for 10s chunks
             return result
         except concurrent.futures.TimeoutError:
-            return "Transcription timeout"
+            return "Transcription timeout (20s limit for 10s chunk)"
         except Exception as e:
             return f"Async error: {e}"
 

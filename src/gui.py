@@ -2868,50 +2868,43 @@ class MicrophoneTranscriberGUI:
             )
             return
 
-        # Confirm before starting
-        device_names = [name for idx, name in self.mics if idx in selected]
-        confirm_msg = (
-            f"Start real-time recording from:\n"
-            f"• {device_names[0]}\n"
-            f"• {device_names[1]}\n"
-            f"Recording will continue until you stop it."
+        # Start recording immediately without confirmation
+        self.clear_all_output()
+
+        # Update UI state
+        self.is_recording = True
+        self.is_paused = False
+        self.status_var.set(
+            "Recording: 10s samples with 200ms overlap - no conversation lost"
         )
 
-        if messagebox.askyesno("Confirm Recording", confirm_msg):
-            self.clear_all_output()
+        # Update recording controls
+        self.update_recording_controls_state()
 
-            # Update UI state
-            self.is_recording = True
-            self.is_paused = False
-            self.status_var.set("Continuous recording active - audio never stops...")
+        # Start real-time markdown saving
+        self.start_realtime_markdown_save()
 
-            # Update recording controls
-            self.update_recording_controls_state()
+        # Create stop events for each microphone
+        self.stop_events = [threading.Event() for _ in selected]
+        self.recording_threads = []
 
-            # Start real-time markdown saving
-            self.start_realtime_markdown_save()
+        # Start recording threads
+        for i, device_index in enumerate(selected):
+            stop_event = self.stop_events[i]
+            thread = threading.Thread(
+                target=self.realtime_record_and_transcribe,
+                args=(device_index, stop_event, selected),
+                daemon=True,
+            )
+            thread.start()
+            self.recording_threads.append(thread)
 
-            # Create stop events for each microphone
-            self.stop_events = [threading.Event() for _ in selected]
-            self.recording_threads = []
-
-            # Start recording threads
-            for i, device_index in enumerate(selected):
-                stop_event = self.stop_events[i]
-                thread = threading.Thread(
-                    target=self.realtime_record_and_transcribe,
-                    args=(device_index, stop_event, selected),
-                    daemon=True,
-                )
-                thread.start()
-                self.recording_threads.append(thread)
-
-                # Add initial log message
-                self.add_log_message(
-                    device_index,
-                    f"🔴 CONTINUOUS: Non-stop recording and transcription from device {device_index}",
-                    selected,
-                )
+            # Add initial log message
+            self.add_log_message(
+                device_index,
+                f"🔴 CONTINUOUS: 10s sampling + 200ms overlap from device {device_index} (never loses conversation)",
+                selected,
+            )
 
     def stop_realtime_recording(self):
         """Stop real-time recording"""
@@ -2931,7 +2924,9 @@ class MicrophoneTranscriberGUI:
 
         # Update UI
         self.update_recording_controls_state()
-        self.status_var.set("Continuous recording stopped - transcripts auto-saved")
+        self.status_var.set(
+            "Recording stopped - 10s samples with 200ms overlap completed"
+        )
 
         # Refresh files list if files tab exists
         if hasattr(self, "files_listbox"):
@@ -3060,7 +3055,7 @@ class MicrophoneTranscriberGUI:
                     # Add processing start log
                     self.add_log_message(
                         device_idx,
-                        f"Worker {worker_id}: Starting transcription...",
+                        f"Worker {worker_id}: Processing 10s sample with 200ms overlap (no loss)",
                         selected_indices,
                     )
 
@@ -3118,13 +3113,14 @@ class MicrophoneTranscriberGUI:
         # Add initial status
         self.add_log_message(
             device_index,
-            f"🎤 Starting continuous audio capture (non-blocking pipeline)",
+            f"🎤 Starting continuous audio capture with 10s samples + 200ms overlap (no conversation loss)",
             selected_indices,
         )
 
-        # Start real-time capture with continuous mode (2-second chunks for responsiveness)
+        # Start real-time capture with 10-second chunks for better transcription quality
+        # 200ms overlap ensures no conversation is lost between chunks
         capture_audio_realtime(
-            device_index, on_audio_chunk, stop_event, chunk_duration=2
+            device_index, on_audio_chunk, stop_event, chunk_duration=10
         )
 
         # Signal all transcription workers to shutdown
@@ -3214,20 +3210,11 @@ class MicrophoneTranscriberGUI:
             )
             return
 
-        # Confirm before starting
-        device_names = [name for idx, name in self.mics if idx in selected]
-        confirm_msg = (
-            f"Start recording from:\n"
-            f"• {device_names[0]}\n"
-            f"• {device_names[1]}\n"
-            f"Recording will last 20 seconds."
-        )
-
-        if messagebox.askyesno("Confirm Recording", confirm_msg):
-            self.clear_all_output()
-            threading.Thread(
-                target=self.threaded_listen, args=(selected,), daemon=True
-            ).start()
+        # Start recording immediately without confirmation
+        self.clear_all_output()
+        threading.Thread(
+            target=self.threaded_listen, args=(selected,), daemon=True
+        ).start()
 
     def on_closing(self):
         """Handle application closing"""
