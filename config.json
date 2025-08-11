@@ -1,0 +1,11 @@
+{
+    "ollama": {
+        "base_url": "http://localhost:11434",
+        "model_name": "test-model",
+        "temperature": 0.3,
+        "top_p": 0.8,
+        "num_predict": 2048
+    },
+    "auto_generate_ata": true,
+    "language": "pt-BR"
+}

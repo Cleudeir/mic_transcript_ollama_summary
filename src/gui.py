@@ -17,6 +17,7 @@ from src.transcribe_text import transcribe_and_display
 from tkinter import messagebox
 from src.capture_audio import get_microphone_list, capture_audio_with_callback
 from src.transcribe_text import transcribe_and_display
+from src.ollama_service import OllamaService
 
 
 class MicrophoneTranscriberGUI:
@@ -34,6 +35,7 @@ class MicrophoneTranscriberGUI:
         self.is_recording = False
         self.stop_events = []  # List of stop events for real-time recording
         self.recording_threads = []  # List of recording threads
+        self.is_shutting_down = False  # Flag to track shutdown status
 
         # Create separate text widgets for logs and transcripts
         self.log_outputs = {}  # Dictionary to store log outputs for each device
@@ -46,11 +48,25 @@ class MicrophoneTranscriberGUI:
         self.markdown_file = None
         self.session_start_time = None
 
+        # Ollama service for generating meeting minutes
+        self.ollama_service = OllamaService()
+        self.ollama_available = False
+        self.auto_generate_ata = True  # Automatic generation enabled by default
+
+        # Load main configuration
+        self.config = self.load_main_config()
+
+        # Initialize selected transcript path for ATA generation
+        self.selected_transcript_path = None
+
         # Setup GUI components
         self.setup_gui()
 
         # Load saved microphone preferences
         self.load_mic_preferences()
+
+        # Check Ollama availability after GUI is setup
+        self.root.after(1000, self.check_ollama_availability)  # Delay 1 second
 
     def setup_gui(self):
         """Setup all GUI components"""
@@ -109,6 +125,15 @@ class MicrophoneTranscriberGUI:
         )
         self.auto_save_label.pack(side=tk.LEFT, padx=5)
 
+        # Ollama status label
+        self.ollama_status_label = tk.Label(
+            button_frame,
+            text="🌐 Ollama Remote: Checking...",
+            font=("Arial", 8),
+            fg="orange",
+        )
+        self.ollama_status_label.pack(side=tk.LEFT, padx=5)
+
         # Create notebook for tabbed interface
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
@@ -117,6 +142,8 @@ class MicrophoneTranscriberGUI:
         self.create_combined_tab()
         self.create_logs_tab()
         self.create_transcripts_tab()
+        self.create_files_tab()
+        self.create_config_tab()
 
         # Set up output mapping after tabs are created
         self.setup_output_mapping()
@@ -163,6 +190,10 @@ class MicrophoneTranscriberGUI:
         )
         settings_menu.add_separator()
         settings_menu.add_command(
+            label="🤖 Auto-generate Ata", command=self.toggle_auto_ata_generation
+        )
+        settings_menu.add_separator()
+        settings_menu.add_command(
             label="📊 Performance Monitor", command=self.toggle_performance_monitor
         )
 
@@ -171,8 +202,17 @@ class MicrophoneTranscriberGUI:
         menubar.add_cascade(label="📁 File", menu=file_menu)
 
         file_menu.add_command(
-            label=" Open Transcript Folder", command=self.open_transcript_folder
+            label="📄 Open Transcript Folder", command=self.open_transcript_folder
         )
+        file_menu.add_command(
+            label="📋 View All Transcripts", command=self.view_all_transcripts
+        )
+        file_menu.add_separator()
+        file_menu.add_command(
+            label="🤖 Generate Meeting Minutes",
+            command=self.generate_meeting_minutes_dialog,
+        )
+        file_menu.add_command(label="📝 View All Atas", command=self.view_all_atas)
         file_menu.add_separator()
         file_menu.add_command(
             label="🔄 Reset Application", command=self.reset_application
@@ -427,6 +467,777 @@ class MicrophoneTranscriberGUI:
         self.mic2_transcript_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         mic2_transcript_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
+    def create_files_tab(self):
+        """Create the files management tab"""
+        files_frame = ttk.Frame(self.notebook)
+        self.notebook.add(files_frame, text="📁 Files")
+
+        # Main container
+        main_container = tk.Frame(files_frame)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        # Files list section
+        files_section = ttk.LabelFrame(
+            main_container, text="📄 Generated Files", padding=10
+        )
+        files_section.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+
+        # Files listbox with scrollbar
+        files_list_frame = tk.Frame(files_section)
+        files_list_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.files_listbox = tk.Listbox(files_list_frame, selectmode=tk.SINGLE)
+        files_scrollbar = tk.Scrollbar(
+            files_list_frame, orient=tk.VERTICAL, command=self.files_listbox.yview
+        )
+        self.files_listbox.configure(yscrollcommand=files_scrollbar.set)
+        self.files_listbox.bind("<Double-Button-1>", self.open_selected_file)
+
+        self.files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        files_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Control buttons
+        buttons_frame = tk.Frame(files_section)
+        buttons_frame.pack(fill=tk.X, pady=(10, 0))
+
+        refresh_btn = tk.Button(
+            buttons_frame,
+            text="🔄 Refresh",
+            command=self.refresh_files_list,
+            bg="#e3f2fd",
+            relief="groove",
+        )
+        refresh_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        open_btn = tk.Button(
+            buttons_frame,
+            text="📖 Open",
+            command=self.open_selected_file,
+            bg="#e8f5e8",
+            relief="groove",
+        )
+        open_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        delete_btn = tk.Button(
+            buttons_frame,
+            text="🗑️ Delete",
+            command=self.delete_selected_file,
+            bg="#ffebee",
+            relief="groove",
+        )
+        delete_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        open_folder_btn = tk.Button(
+            buttons_frame,
+            text="📁 Open Folder",
+            command=self.open_output_folder,
+            bg="#fff3e0",
+            relief="groove",
+        )
+        open_folder_btn.pack(side=tk.RIGHT)
+
+        # Generate ATA section
+        ata_section = ttk.LabelFrame(
+            main_container, text="🤖 Generate Meeting Minutes (ATA)", padding=10
+        )
+        ata_section.pack(fill=tk.X, pady=(5, 0))
+
+        # ATA generation controls
+        ata_controls_frame = tk.Frame(ata_section)
+        ata_controls_frame.pack(fill=tk.X)
+
+        tk.Label(
+            ata_controls_frame,
+            text="Select transcript file to generate ATA:",
+            font=("Arial", 10, "bold"),
+        ).pack(anchor=tk.W, pady=(0, 5))
+
+        # File selection frame
+        file_select_frame = tk.Frame(ata_controls_frame)
+        file_select_frame.pack(fill=tk.X, pady=(0, 5))
+
+        self.selected_file_var = tk.StringVar()
+        self.selected_file_label = tk.Label(
+            file_select_frame,
+            textvariable=self.selected_file_var,
+            bg="#f5f5f5",
+            relief="sunken",
+            anchor="w",
+        )
+        self.selected_file_label.pack(
+            side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 5), pady=5
+        )
+
+        select_file_btn = tk.Button(
+            file_select_frame,
+            text="📁 Select File",
+            command=self.select_transcript_file,
+            bg="#e3f2fd",
+            relief="groove",
+        )
+        select_file_btn.pack(side=tk.RIGHT)
+
+        # Generate button
+        generate_ata_btn = tk.Button(
+            ata_controls_frame,
+            text="🤖 Generate Meeting Minutes",
+            command=self.generate_ata_from_file,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            relief="groove",
+        )
+        generate_ata_btn.pack(pady=(10, 0))
+
+        # ATA status
+        self.ata_status_label = tk.Label(
+            ata_controls_frame,
+            text="Select a transcript file to generate meeting minutes",
+            font=("Arial", 9),
+            fg="gray",
+        )
+        self.ata_status_label.pack(pady=(5, 0))
+
+        # Initialize files list
+        self.refresh_files_list()
+
+    def create_config_tab(self):
+        """Create the configuration tab for settings"""
+        config_frame = ttk.Frame(self.notebook)
+        self.notebook.add(config_frame, text="⚙️ Configuration")
+
+        # Create main container with scrollable frame
+        canvas = tk.Canvas(config_frame)
+        scrollbar = ttk.Scrollbar(config_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Microphone Configuration Section
+        mic_section = ttk.LabelFrame(
+            scrollable_frame, text="🎤 Microphone Configuration", padding=10
+        )
+        mic_section.pack(fill=tk.X, padx=10, pady=5)
+
+        tk.Label(
+            mic_section,
+            text="Select exactly two microphones for recording:",
+            font=("Arial", 10, "bold"),
+        ).pack(anchor=tk.W, pady=(0, 5))
+
+        # Container for microphone checkboxes
+        self.config_mic_frame = tk.Frame(mic_section)
+        self.config_mic_frame.pack(fill=tk.X, pady=5)
+
+        # Refresh microphones button
+        refresh_mic_btn = tk.Button(
+            mic_section,
+            text="🔄 Refresh Microphones",
+            command=self.refresh_config_microphones,
+            bg="#e3f2fd",
+            relief="groove",
+        )
+        refresh_mic_btn.pack(anchor=tk.W, pady=5)
+
+        # Ollama Configuration Section
+        ollama_section = ttk.LabelFrame(
+            scrollable_frame, text="🤖 Ollama Configuration", padding=10
+        )
+        ollama_section.pack(fill=tk.X, padx=10, pady=5)
+
+        # Ollama URL
+        url_frame = tk.Frame(ollama_section)
+        url_frame.pack(fill=tk.X, pady=5)
+
+        tk.Label(url_frame, text="Ollama URL:", font=("Arial", 10, "bold")).pack(
+            anchor=tk.W
+        )
+        self.ollama_url_var = tk.StringVar()
+        self.ollama_url_entry = tk.Entry(
+            url_frame, textvariable=self.ollama_url_var, width=50
+        )
+        self.ollama_url_entry.pack(fill=tk.X, pady=(2, 5))
+        self.ollama_url_var.trace("w", self.on_ollama_url_change)
+
+        # Test connection button
+        test_btn = tk.Button(
+            url_frame,
+            text="🔗 Test Connection",
+            command=self.test_ollama_connection,
+            bg="#fff3e0",
+            relief="groove",
+        )
+        test_btn.pack(anchor=tk.W, pady=2)
+
+        # Connection status
+        self.connection_status_label = tk.Label(
+            url_frame, text="Status: Not tested", font=("Arial", 9), fg="gray"
+        )
+        self.connection_status_label.pack(anchor=tk.W, pady=2)
+
+        # Model Selection
+        model_frame = tk.Frame(ollama_section)
+        model_frame.pack(fill=tk.X, pady=5)
+
+        tk.Label(
+            model_frame, text="Available Models:", font=("Arial", 10, "bold")
+        ).pack(anchor=tk.W)
+
+        model_container = tk.Frame(model_frame)
+        model_container.pack(fill=tk.X, pady=2)
+
+        self.model_var = tk.StringVar()
+        self.model_combobox = ttk.Combobox(
+            model_container, textvariable=self.model_var, state="readonly", width=47
+        )
+        self.model_combobox.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        self.model_combobox.bind("<<ComboboxSelected>>", self.on_model_change)
+
+        # Refresh models button
+        refresh_models_btn = tk.Button(
+            model_container,
+            text="🔄",
+            command=self.refresh_ollama_models,
+            width=3,
+            bg="#e8f5e8",
+            relief="groove",
+        )
+        refresh_models_btn.pack(side=tk.RIGHT)
+
+        # Model status
+        self.model_status_label = tk.Label(
+            model_frame,
+            text="Click refresh to load models",
+            font=("Arial", 9),
+            fg="gray",
+        )
+        self.model_status_label.pack(anchor=tk.W, pady=2)
+
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Load current configuration
+        self.load_config_tab_values()
+        self.refresh_config_microphones()
+
+    def load_config_tab_values(self):
+        """Load current configuration values into the config tab"""
+        try:
+            # Load current Ollama URL
+            current_url = self.ollama_service.base_url or "http://localhost:11434"
+            self.ollama_url_var.set(current_url)
+
+            # Load current model
+            current_model = self.ollama_service.model_name or "llama3.2"
+            self.model_var.set(current_model)
+
+        except Exception as e:
+            self.status_var.set(f"Error loading config: {e}")
+
+    def refresh_config_microphones(self):
+        """Refresh the microphone list in the config tab"""
+        try:
+            # Clear existing checkboxes
+            for widget in self.config_mic_frame.winfo_children():
+                widget.destroy()
+
+            # Get current microphones
+            mics = get_microphone_list()
+            self.config_mic_vars = []
+
+            # Load current selection
+            current_selection = []
+            try:
+                with open(self.config_file, "r") as f:
+                    config = json.load(f)
+                    current_selection = [
+                        mic["index"] for mic in config.get("saved_microphones", [])
+                    ]
+            except:
+                pass
+
+            # Create checkboxes for each microphone
+            for i, mic in enumerate(mics):
+                var = tk.IntVar()
+                if i in current_selection:
+                    var.set(1)
+
+                checkbox = tk.Checkbutton(
+                    self.config_mic_frame,
+                    text=f"{i}: {mic}",
+                    variable=var,
+                    command=self.on_microphone_selection_change,
+                    wraplength=400,
+                )
+                checkbox.pack(anchor=tk.W, pady=1)
+                self.config_mic_vars.append((i, var, mic))
+
+        except Exception as e:
+            self.status_var.set(f"Error refreshing microphones: {e}")
+
+    def on_microphone_selection_change(self):
+        """Handle microphone selection changes"""
+        try:
+            selected = [
+                (index, name) for index, var, name in self.config_mic_vars if var.get()
+            ]
+
+            # Limit to 2 selections
+            if len(selected) > 2:
+                # Uncheck the last selected (allow only 2)
+                for index, var, name in self.config_mic_vars:
+                    if var.get() and (index, name) not in selected[:2]:
+                        var.set(0)
+                selected = selected[:2]
+
+            # Save microphone configuration
+            self.save_microphone_config(selected)
+
+            # Update main interface
+            self.load_microphones()
+
+        except Exception as e:
+            self.status_var.set(f"Error updating microphone selection: {e}")
+
+    def save_microphone_config(self, selected_mics):
+        """Save microphone configuration to file"""
+        try:
+            config = {
+                "saved_microphones": [
+                    {"index": index, "name": name} for index, name in selected_mics
+                ],
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+
+            with open(self.config_file, "w") as f:
+                json.dump(config, f, indent=2)
+
+            self.status_var.set(
+                f"Microphone configuration saved ({len(selected_mics)} mics)"
+            )
+
+        except Exception as e:
+            self.status_var.set(f"Error saving microphone config: {e}")
+
+    def on_ollama_url_change(self, *args):
+        """Handle Ollama URL changes"""
+        try:
+            new_url = self.ollama_url_var.get().strip()
+            if new_url and new_url != self.ollama_service.base_url:
+                # Update configuration
+                success = self.ollama_service.update_config(ollama_url=new_url)
+                if success:
+                    self.status_var.set("Ollama URL updated")
+                    self.connection_status_label.config(
+                        text="Status: URL changed, test connection", fg="orange"
+                    )
+                    # Clear models list since URL changed
+                    self.model_combobox["values"] = []
+                    self.model_var.set("")
+                    self.model_status_label.config(
+                        text="Refresh models after testing connection"
+                    )
+        except Exception as e:
+            self.status_var.set(f"Error updating Ollama URL: {e}")
+
+    def on_model_change(self, event=None):
+        """Handle model selection changes"""
+        try:
+            new_model = self.model_var.get()
+            if new_model and new_model != self.ollama_service.model_name:
+                # Update configuration
+                success = self.ollama_service.update_config(model_name=new_model)
+                if success:
+                    self.status_var.set(f"Model updated to: {new_model}")
+                    self.model_status_label.config(
+                        text=f"Active model: {new_model}", fg="green"
+                    )
+        except Exception as e:
+            self.status_var.set(f"Error updating model: {e}")
+
+    def test_ollama_connection(self):
+        """Test connection to Ollama"""
+        try:
+            self.connection_status_label.config(
+                text="Testing connection...", fg="orange"
+            )
+            self.root.update_idletasks()
+
+            if self.ollama_service.is_ollama_available():
+                self.connection_status_label.config(
+                    text="✅ Connection successful", fg="green"
+                )
+                self.refresh_ollama_models()
+            else:
+                self.connection_status_label.config(
+                    text="❌ Connection failed", fg="red"
+                )
+                self.model_combobox["values"] = []
+                self.model_var.set("")
+                self.model_status_label.config(
+                    text="Fix connection to load models", fg="red"
+                )
+
+        except Exception as e:
+            self.connection_status_label.config(
+                text=f"❌ Error: {str(e)[:30]}...", fg="red"
+            )
+
+    def refresh_ollama_models(self):
+        """Refresh the list of available Ollama models"""
+        try:
+            self.model_status_label.config(text="Loading models...", fg="orange")
+            self.root.update_idletasks()
+
+            models = self.ollama_service.get_available_models()
+
+            if models:
+                self.model_combobox["values"] = models
+
+                # Set current model if it exists in the list
+                current_model = self.ollama_service.model_name
+                if current_model in models:
+                    self.model_var.set(current_model)
+                    self.model_status_label.config(
+                        text=f"Active model: {current_model}", fg="green"
+                    )
+                else:
+                    # Set first model as default
+                    self.model_var.set(models[0])
+                    self.model_status_label.config(
+                        text=f"Available models loaded ({len(models)})", fg="blue"
+                    )
+
+            else:
+                self.model_combobox["values"] = []
+                self.model_var.set("")
+                self.model_status_label.config(text="No models available", fg="red")
+
+        except Exception as e:
+            self.model_status_label.config(
+                text=f"Error loading models: {str(e)[:30]}...", fg="red"
+            )
+
+    def refresh_files_list(self):
+        """Refresh the list of generated files"""
+        try:
+            self.files_listbox.delete(0, tk.END)
+
+            # Check if output directory exists
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            transcript_dir = os.path.join(output_dir, "transcript")
+            ata_dir = os.path.join(output_dir, "ata")
+            
+            # Create directories if they don't exist
+            if not os.path.exists(transcript_dir):
+                os.makedirs(transcript_dir)
+            if not os.path.exists(ata_dir):
+                os.makedirs(ata_dir)
+
+            # Get files from both directories
+            files = []
+            
+            # Scan transcript directory
+            if os.path.exists(transcript_dir):
+                for file_name in os.listdir(transcript_dir):
+                    file_path = os.path.join(transcript_dir, file_name)
+                    if os.path.isfile(file_path) and file_name.endswith(".md"):
+                        stat = os.stat(file_path)
+                        modified_time = datetime.datetime.fromtimestamp(stat.st_mtime)
+                        files.append({
+                            "name": file_name,
+                            "path": file_path,
+                            "type": "📄 Transcript",
+                            "folder": "transcript/",
+                            "modified": modified_time,
+                            "size": stat.st_size,
+                        })
+            
+            # Scan ATA directory
+            if os.path.exists(ata_dir):
+                for file_name in os.listdir(ata_dir):
+                    file_path = os.path.join(ata_dir, file_name)
+                    if os.path.isfile(file_path) and file_name.endswith(".md"):
+                        stat = os.stat(file_path)
+                        modified_time = datetime.datetime.fromtimestamp(stat.st_mtime)
+                        files.append({
+                            "name": file_name,
+                            "path": file_path,
+                            "type": "🤖 ATA",
+                            "folder": "ata/",
+                            "modified": modified_time,
+                            "size": stat.st_size,
+                        })
+
+            # Also scan main output directory for legacy files
+            for file_name in os.listdir(output_dir):
+                file_path = os.path.join(output_dir, file_name)
+                if os.path.isfile(file_path) and file_name.endswith(".md"):
+                    # Get file stats
+                    stat = os.stat(file_path)
+                    modified_time = datetime.datetime.fromtimestamp(stat.st_mtime)
+                    
+                    # Determine file type
+                    if file_name.endswith("_ata.md"):
+                        file_type = "🤖 ATA (Legacy)"
+                    else:
+                        file_type = "� Transcript (Legacy)"
+
+                    files.append({
+                        "name": file_name,
+                        "path": file_path,
+                        "type": file_type,
+                        "folder": "",
+                        "modified": modified_time,
+                        "size": stat.st_size,
+                    })
+
+            # Sort by modification time (newest first)
+            files.sort(key=lambda x: x["modified"], reverse=True)
+
+            # Add files to listbox
+            for file_info in files:
+                size_str = self.format_file_size(file_info["size"])
+                time_str = file_info["modified"].strftime("%Y-%m-%d %H:%M")
+                folder_info = file_info.get("folder", "")
+                display_text = f"{file_info['type']} | {folder_info}{file_info['name']} | {size_str} | {time_str}"
+                self.files_listbox.insert(tk.END, display_text)
+
+            if not files:
+                self.files_listbox.insert(tk.END, "No files found")
+
+        except Exception as e:
+            self.files_listbox.delete(0, tk.END)
+            self.files_listbox.insert(tk.END, f"Error loading files: {e}")
+
+    def format_file_size(self, size_bytes):
+        """Format file size in human readable format"""
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
+        else:
+            return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+    def open_selected_file(self, event=None):
+        """Open the selected file"""
+        try:
+            selection = self.files_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a file to open")
+                return
+
+            # Parse the selected file name from display text
+            display_text = self.files_listbox.get(selection[0])
+            if " | " not in display_text:
+                return
+
+            parts = display_text.split(" | ")
+            if len(parts) < 2:
+                return
+
+            file_name = parts[1]
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            file_path = os.path.join(output_dir, file_name)
+
+            if os.path.exists(file_path):
+                # Open file with default system application
+                import subprocess
+                import sys
+
+                if sys.platform.startswith("win"):
+                    os.startfile(file_path)
+                elif sys.platform.startswith("darwin"):
+                    subprocess.call(["open", file_path])
+                else:
+                    subprocess.call(["xdg-open", file_path])
+
+                self.status_var.set(f"Opened: {file_name}")
+            else:
+                messagebox.showerror("Error", f"File not found: {file_name}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open file: {e}")
+
+    def delete_selected_file(self):
+        """Delete the selected file"""
+        try:
+            selection = self.files_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a file to delete")
+                return
+
+            # Parse the selected file name from display text
+            display_text = self.files_listbox.get(selection[0])
+            if " | " not in display_text:
+                return
+
+            parts = display_text.split(" | ")
+            if len(parts) < 2:
+                return
+
+            file_name = parts[1]
+
+            # Confirm deletion
+            if not messagebox.askyesno(
+                "Confirm Delete", f"Are you sure you want to delete '{file_name}'?"
+            ):
+                return
+
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            file_path = os.path.join(output_dir, file_name)
+
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                self.status_var.set(f"Deleted: {file_name}")
+                self.refresh_files_list()
+            else:
+                messagebox.showerror("Error", f"File not found: {file_name}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to delete file: {e}")
+
+    def open_output_folder(self):
+        """Open the output folder in file explorer"""
+        try:
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            import subprocess
+            import sys
+
+            if sys.platform.startswith("win"):
+                os.startfile(output_dir)
+            elif sys.platform.startswith("darwin"):
+                subprocess.call(["open", output_dir])
+            else:
+                subprocess.call(["xdg-open", output_dir])
+
+            self.status_var.set("Output folder opened")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open output folder: {e}")
+
+    def select_transcript_file(self):
+        """Select a transcript file for ATA generation"""
+        try:
+            # Start in the transcript directory
+            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            if not os.path.exists(transcript_dir):
+                # Fallback to main output directory
+                transcript_dir = os.path.join(os.path.dirname(__file__), "output")
+            
+            file_path = filedialog.askopenfilename(
+                title="Select Transcript File",
+                filetypes=[
+                    ("Markdown files", "*.md"),
+                    ("Text files", "*.txt"),
+                    ("All files", "*.*"),
+                ],
+                initialdir=transcript_dir,
+            )
+
+            if file_path:
+                self.selected_file_var.set(os.path.basename(file_path))
+                self.selected_transcript_path = file_path
+                self.ata_status_label.config(
+                    text="File selected. Click Generate to create ATA.", fg="blue"
+                )
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to select file: {e}")
+
+    def generate_ata_from_file(self):
+        """Generate ATA from selected transcript file"""
+        try:
+            if (
+                not hasattr(self, "selected_transcript_path")
+                or not self.selected_transcript_path
+            ):
+                messagebox.showwarning(
+                    "Warning", "Please select a transcript file first"
+                )
+                return
+
+            if not os.path.exists(self.selected_transcript_path):
+                messagebox.showerror("Error", "Selected file no longer exists")
+                return
+
+            self.ata_status_label.config(
+                text="Generating meeting minutes...", fg="orange"
+            )
+            self.root.update_idletasks()
+
+            # Generate output file name in ATA directory
+            base_name = os.path.splitext(
+                os.path.basename(self.selected_transcript_path)
+            )[0]
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_name = f"{base_name}_ata_{timestamp}.md"
+            
+            # Create ATA directory if it doesn't exist
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            ata_dir = os.path.join(output_dir, "ata")
+            if not os.path.exists(ata_dir):
+                os.makedirs(ata_dir)
+            
+            output_path = os.path.join(ata_dir, output_name)
+
+            # Generate ATA using Ollama service
+            result = self.ollama_service.generate_and_save_minutes(
+                self.selected_transcript_path,
+                output_path,
+                self.config.get("language", "pt-BR"),
+            )
+
+            if result.get("success"):
+                self.ata_status_label.config(
+                    text=f"✅ ATA generated: {output_name}", fg="green"
+                )
+                self.refresh_files_list()
+
+                # Ask if user wants to open the generated file
+                if messagebox.askyesno(
+                    "Success",
+                    f"Meeting minutes generated successfully!\n\nOpen the file now?",
+                ):
+                    self.open_file(output_path)
+            else:
+                error_msg = result.get("error", "Unknown error")
+                self.ata_status_label.config(
+                    text=f"❌ Generation failed: {error_msg[:50]}...", fg="red"
+                )
+                messagebox.showerror(
+                    "Error", f"Failed to generate meeting minutes:\n{error_msg}"
+                )
+
+        except Exception as e:
+            self.ata_status_label.config(text=f"❌ Error: {str(e)[:50]}...", fg="red")
+            messagebox.showerror("Error", f"Failed to generate ATA: {e}")
+
+    def open_file(self, file_path):
+        """Open a file with the default system application"""
+        try:
+            import subprocess
+            import sys
+
+            if sys.platform.startswith("win"):
+                os.startfile(file_path)
+            elif sys.platform.startswith("darwin"):
+                subprocess.call(["open", file_path])
+            else:
+                subprocess.call(["xdg-open", file_path])
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open file: {e}")
+
     def save_transcripts(self):
         """Save transcripts to files"""
         if (
@@ -539,15 +1350,77 @@ class MicrophoneTranscriberGUI:
                     if line.strip():
                         f.write(f"{line}\n")
 
+    def auto_save_transcripts(self):
+        """Automatically save transcripts to the output folder"""
+        try:
+            # Check if there's any content to save
+            mic1_content = self.mic1_transcript_text.get(1.0, tk.END).strip()
+            mic2_content = self.mic2_transcript_text.get(1.0, tk.END).strip()
+
+            if not mic1_content and not mic2_content:
+                return
+
+            # Create output directories if they don't exist
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            transcript_dir = os.path.join(output_dir, "transcript")
+            if not os.path.exists(transcript_dir):
+                os.makedirs(transcript_dir)
+
+            # Generate filename with timestamp
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"meeting_transcripts_{timestamp}.md"
+            file_path = os.path.join(transcript_dir, filename)
+
+            # Save transcripts using the existing method
+            self._save_transcripts_to_markdown(file_path)
+
+            self.status_var.set(f"Transcripts auto-saved: {filename}")
+
+            # Auto-generate ATA if enabled and Ollama is available
+            if self.auto_generate_ata and self.ollama_available:
+                self.auto_generate_ata_for_file(file_path)
+
+        except Exception as e:
+            self.status_var.set(f"Error auto-saving transcripts: {e}")
+
+    def auto_generate_ata_for_file(self, transcript_path):
+        """Automatically generate ATA for a transcript file"""
+        try:
+            # Create ATA directory if it doesn't exist
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            ata_dir = os.path.join(output_dir, "ata")
+            if not os.path.exists(ata_dir):
+                os.makedirs(ata_dir)
+
+            # Generate ATA filename
+            base_name = os.path.splitext(os.path.basename(transcript_path))[0]
+            ata_filename = f"{base_name}_ata.md"
+            ata_path = os.path.join(ata_dir, ata_filename)
+
+            # Generate ATA using Ollama service
+            result = self.ollama_service.generate_and_save_minutes(
+                transcript_path, ata_path, self.config.get("language", "pt-BR")
+            )
+
+            if result.get("success"):
+                self.status_var.set(f"ATA auto-generated: {ata_filename}")
+            else:
+                error_msg = result.get("error", "Unknown error")
+                self.status_var.set(f"ATA generation failed: {error_msg[:50]}...")
+
+        except Exception as e:
+            self.status_var.set(f"Error auto-generating ATA: {e}")
+
     def start_realtime_markdown_save(self):
         """Initialize real-time markdown file for auto-saving"""
-        if not os.path.exists("src/output"):
-            os.makedirs("src/output")
+        transcript_dir = "src/output/transcript"
+        if not os.path.exists(transcript_dir):
+            os.makedirs(transcript_dir)
 
         # Create filename with timestamp
         self.session_start_time = datetime.datetime.now()
         timestamp = self.session_start_time.strftime("%Y%m%d_%H%M%S")
-        self.markdown_file_path = f"src/output/meeting_transcripts_{timestamp}.md"
+        self.markdown_file_path = f"{transcript_dir}/meeting_transcripts_{timestamp}.md"
 
         try:
             # Initialize markdown file
@@ -601,6 +1474,15 @@ class MicrophoneTranscriberGUI:
                 # Update UI
                 self.auto_save_label.config(text="Auto-save: OFF", fg="gray")
                 self.status_var.set(f"Session saved to: {self.markdown_file_path}")
+
+                # Ask user if they want to generate meeting minutes with Ollama
+                if self.ollama_available and self.markdown_file_path:
+                    if self.auto_generate_ata:
+                        # Automatically generate ata in background
+                        self.auto_generate_meeting_minutes()
+                    else:
+                        # Prompt user to generate manually
+                        self.prompt_for_meeting_minutes()
 
             except Exception as e:
                 self.status_var.set(f"Error closing auto-save file: {e}")
@@ -656,6 +1538,29 @@ class MicrophoneTranscriberGUI:
             messagebox.showwarning(
                 "Warning", "Please select exactly two microphones before saving."
             )
+
+    def load_main_config(self):
+        """Load main configuration from config.json"""
+        try:
+            config_path = "config.json"
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Error loading main config: {e}")
+
+        # Return default config
+        return {
+            "ollama": {
+                "base_url": "http://localhost:11434",
+                "model_name": "llama3.2",
+                "temperature": 0.3,
+                "top_p": 0.8,
+                "num_predict": 2048,
+            },
+            "auto_generate_ata": True,
+            "language": "pt-BR",
+        }
 
     def load_mic_preferences(self):
         """Load previously saved microphone preferences"""
@@ -939,15 +1844,22 @@ class MicrophoneTranscriberGUI:
         # Stop real-time markdown saving
         self.stop_realtime_markdown_save()
 
+        # Auto-save transcripts to output folder
+        self.auto_save_transcripts()
+
         # Update UI
         self.listen_btn.config(
             text="🎤 Start Continuous Recording & Transcription", bg="#4CAF50"
         )
-        self.status_var.set("Continuous recording stopped")
+        self.status_var.set("Continuous recording stopped - transcripts auto-saved")
 
         # Add log message
         self.combined_output.insert(tk.END, "\n=== RECORDING STOPPED ===\n")
         self.combined_output.see(tk.END)
+
+        # Refresh files list if files tab exists
+        if hasattr(self, "files_listbox"):
+            self.refresh_files_list()
 
     def realtime_record_and_transcribe(
         self, device_index, stop_event, selected_indices
@@ -1179,6 +2091,7 @@ class MicrophoneTranscriberGUI:
 
     def on_closing(self):
         """Handle application closing"""
+        self.is_shutting_down = True  # Set shutdown flag
         if self.is_recording:
             if messagebox.askokcancel(
                 "Quit", "Recording is in progress. Do you want to stop and quit?"
@@ -1758,6 +2671,736 @@ Created for professional meeting transcription
 with focus on continuous, uninterrupted operation.
         """
         messagebox.showinfo("About", about_text)
+
+    def check_ollama_availability(self):
+        """Check if Ollama is available and update status"""
+
+        def check_in_background():
+            try:
+                # Check if we're shutting down before starting
+                if self.is_shutting_down:
+                    return
+
+                self.ollama_available = self.ollama_service.is_ollama_available()
+
+                # Check again before proceeding with UI updates
+                if self.is_shutting_down:
+                    return
+
+                if self.ollama_available:
+                    if self.ollama_service.is_model_available():
+                        self._safe_update_ollama_status(
+                            "🌐 Ollama Remote: Ready", "green"
+                        )
+                    else:
+                        self._safe_update_ollama_status(
+                            "🌐 Ollama Remote: Downloading model...", "orange"
+                        )
+                        # Try to pull the model
+                        if not self.is_shutting_down:
+                            success = self.ollama_service.pull_model()
+                            if not self.is_shutting_down and success:
+                                self._safe_update_ollama_status(
+                                    "🌐 Ollama Remote: Ready", "green"
+                                )
+                            elif not self.is_shutting_down:
+                                self._safe_update_ollama_status(
+                                    "🌐 Ollama Remote: Model download failed", "red"
+                                )
+                else:
+                    self._safe_update_ollama_status(
+                        "🌐 Ollama Remote: Not available", "red"
+                    )
+            except Exception as e:
+                if not self.is_shutting_down:
+                    self.ollama_available = False
+                    self._safe_update_ollama_status(
+                        "🌐 Ollama Remote: Connection Error", "red"
+                    )
+                    print(f"Ollama check failed: {e}")
+
+        # Run check in background thread only if not shutting down
+        if not self.is_shutting_down:
+            threading.Thread(target=check_in_background, daemon=True).start()
+
+    def _safe_update_ollama_status(self, text, color):
+        """Safely update Ollama status from background thread"""
+        try:
+            # Check if we're shutting down
+            if self.is_shutting_down:
+                return
+
+            # Check if root window still exists and is valid
+            if self.root and not self.is_shutting_down:
+                try:
+                    # Verify the window still exists
+                    self.root.winfo_exists()
+                    # Schedule the update in the main thread
+                    self.root.after(
+                        0, lambda: self._update_ollama_label_if_valid(text, color)
+                    )
+                except tk.TclError:
+                    # Window has been destroyed
+                    return
+        except Exception as e:
+            # Silently handle any errors during shutdown
+            pass
+
+    def _update_ollama_label_if_valid(self, text, color):
+        """Update the Ollama label only if it's still valid"""
+        try:
+            if not self.is_shutting_down and hasattr(self, "ollama_status_label"):
+                self.ollama_status_label.config(text=text, fg=color)
+        except Exception:
+            # Silently handle any errors during shutdown
+            pass
+
+    def _pull_ollama_model(self):
+        """Pull Ollama model in background"""
+        try:
+            self.status_var.set("Downloading Ollama model in background...")
+            success = self.ollama_service.pull_model()
+            if success:
+                self.status_var.set("Ollama model ready for meeting minutes generation")
+            else:
+                self.status_var.set("Failed to download Ollama model")
+        except Exception as e:
+            self.status_var.set(f"Error downloading model: {e}")
+
+    def prompt_for_meeting_minutes(self):
+        """Prompt user to generate meeting minutes after recording ends"""
+        if not self.ollama_available:
+            return
+
+        response = messagebox.askyesno(
+            "Gerar Ata da Reunião",
+            "A gravação foi finalizada. Deseja gerar uma ata da reunião automaticamente?\n\n"
+            "A ata será organizada por temas abordados e incluirá um resumo dos pontos principais.",
+            icon="question",
+        )
+
+        if response:
+            self.generate_meeting_minutes_from_file(self.markdown_file_path)
+
+    def generate_meeting_minutes_dialog(self):
+        """Open dialog to select transcript file and generate meeting minutes"""
+        if not self.ollama_available:
+            messagebox.showerror(
+                "Ollama Indisponível",
+                "O serviço Ollama não está disponível.\n\n"
+                "Verificando conexão com o servidor remoto:\n"
+                "https://api.apps.tec.br/ollama\n\n"
+                "Por favor, verifique sua conexão com a internet.",
+            )
+            return
+
+        # Select transcript file
+        file_path = filedialog.askopenfilename(
+            title="Selecionar Transcrição da Reunião",
+            filetypes=[
+                ("Markdown files", "*.md"),
+                ("Text files", "*.txt"),
+                ("All files", "*.*"),
+            ],
+            initialdir="src/output" if os.path.exists("src/output") else ".",
+        )
+
+        if file_path:
+            self.generate_meeting_minutes_from_file(file_path)
+
+    def generate_meeting_minutes_from_file(self, transcript_file_path):
+        """Generate meeting minutes from a transcript file"""
+        if not os.path.exists(transcript_file_path):
+            messagebox.showerror(
+                "Erro", f"Arquivo não encontrado: {transcript_file_path}"
+            )
+            return
+
+        # Create progress dialog
+        progress_window = tk.Toplevel(self.root)
+        progress_window.title("Gerando Ata da Reunião")
+        progress_window.geometry("400x200")
+        progress_window.transient(self.root)
+        progress_window.grab_set()
+
+        # Center the window
+        progress_window.geometry(
+            "+%d+%d" % (self.root.winfo_rootx() + 250, self.root.winfo_rooty() + 150)
+        )
+
+        tk.Label(
+            progress_window,
+            text="🤖 Gerando Ata da Reunião com IA",
+            font=("Arial", 14, "bold"),
+        ).pack(pady=20)
+
+        progress_text = tk.Text(progress_window, height=6, wrap=tk.WORD)
+        progress_text.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+
+        # Cancel button (initially disabled)
+        cancel_btn = tk.Button(
+            progress_window,
+            text="Fechar",
+            command=progress_window.destroy,
+            state=tk.DISABLED,
+        )
+        cancel_btn.pack(pady=10)
+
+        def update_progress(message):
+            progress_text.insert(tk.END, f"{message}\n")
+            progress_text.see(tk.END)
+            progress_window.update()
+
+        def generate_in_thread():
+            try:
+                update_progress("📖 Lendo transcrição...")
+
+                # Determine output file path
+                base_name = os.path.splitext(transcript_file_path)[0]
+                output_file_path = f"{base_name}_ata.md"
+
+                update_progress("🤖 Enviando para Ollama...")
+                update_progress(
+                    "⏳ Processando com IA (pode demorar alguns minutos)..."
+                )
+
+                # Generate meeting minutes
+                result = self.ollama_service.generate_and_save_minutes(
+                    transcript_file_path, output_file_path, language="pt-BR"
+                )
+
+                if result["success"]:
+                    update_progress("✅ Ata gerada com sucesso!")
+                    update_progress(f"📄 Salva em: {output_file_path}")
+
+                    # Show success message with option to open file
+                    def show_success():
+                        response = messagebox.askyesno(
+                            "Ata Gerada com Sucesso!",
+                            f"A ata da reunião foi gerada e salva em:\n{output_file_path}\n\n"
+                            "Deseja abrir o arquivo agora?",
+                            parent=progress_window,
+                        )
+
+                        if response:
+                            try:
+                                os.startfile(output_file_path)  # Windows
+                            except:
+                                try:
+                                    import subprocess
+
+                                    subprocess.call(["open", output_file_path])  # macOS
+                                except:
+                                    messagebox.showinfo(
+                                        "Arquivo Salvo",
+                                        f"Ata salva em: {output_file_path}",
+                                        parent=progress_window,
+                                    )
+
+                        progress_window.destroy()
+
+                    self.root.after(0, show_success)
+
+                else:
+                    error_msg = result.get("error", "Erro desconhecido")
+                    update_progress(f"❌ Erro: {error_msg}")
+
+                    def show_error():
+                        messagebox.showerror(
+                            "Erro ao Gerar Ata",
+                            f"Não foi possível gerar a ata da reunião:\n\n{error_msg}\n\n"
+                            "Verifique se o Ollama está executando e tente novamente.",
+                            parent=progress_window,
+                        )
+
+                    self.root.after(0, show_error)
+
+            except Exception as e:
+                update_progress(f"❌ Erro inesperado: {e}")
+
+                def show_exception():
+                    messagebox.showerror(
+                        "Erro Inesperado",
+                        f"Ocorreu um erro inesperado:\n\n{e}",
+                        parent=progress_window,
+                    )
+
+                self.root.after(0, show_exception)
+
+            finally:
+                # Enable close button
+                def enable_close():
+                    cancel_btn.config(state=tk.NORMAL, text="Fechar")
+
+                self.root.after(0, enable_close)
+
+        # Start generation in background thread
+        threading.Thread(target=generate_in_thread, daemon=True).start()
+
+    def toggle_auto_ata_generation(self):
+        """Toggle automatic ata generation on/off"""
+        self.auto_generate_ata = not self.auto_generate_ata
+        status = "ATIVADA" if self.auto_generate_ata else "DESATIVADA"
+        messagebox.showinfo(
+            "Geração Automática de Ata",
+            f"Geração automática de ata {status}.\n\n"
+            f"{'✅' if self.auto_generate_ata else '❌'} Atas serão geradas automaticamente após o fim da transcrição.",
+        )
+
+    def auto_generate_meeting_minutes(self):
+        """Automatically generate meeting minutes without user prompt"""
+        if not self.ollama_available or not self.markdown_file_path:
+            return
+
+        # Show status in the interface
+        self.status_var.set("🤖 Gerando ata automaticamente...")
+
+        def generate_in_background():
+            try:
+                # Determine output file path
+                base_name = os.path.splitext(self.markdown_file_path)[0]
+                output_file_path = f"{base_name}_ata.md"
+
+                # Generate meeting minutes
+                result = self.ollama_service.generate_and_save_minutes(
+                    self.markdown_file_path, output_file_path, language="pt-BR"
+                )
+
+                if result["success"]:
+                    # Update status on success
+                    self.root.after(
+                        0,
+                        lambda: self.status_var.set(
+                            f"✅ Ata gerada automaticamente: {os.path.basename(output_file_path)}"
+                        ),
+                    )
+
+                    # Show notification
+                    def show_notification():
+                        messagebox.showinfo(
+                            "Ata Gerada Automaticamente",
+                            f"✅ Ata da reunião foi gerada automaticamente!\n\n"
+                            f"📄 Arquivo: {os.path.basename(output_file_path)}\n"
+                            f"📂 Local: {os.path.dirname(output_file_path)}\n\n"
+                            f"Acesse pelo menu: Arquivo > Ver Todas as Atas",
+                        )
+
+                    self.root.after(0, show_notification)
+
+                else:
+                    error_msg = result.get("error", "Erro desconhecido")
+                    self.root.after(
+                        0,
+                        lambda: self.status_var.set(
+                            f"❌ Erro na geração automática: {error_msg}"
+                        ),
+                    )
+
+            except Exception as e:
+                self.root.after(
+                    0,
+                    lambda: self.status_var.set(
+                        f"❌ Erro inesperado na geração automática: {e}"
+                    ),
+                )
+
+        # Start generation in background thread
+        threading.Thread(target=generate_in_background, daemon=True).start()
+
+    def view_all_transcripts(self):
+        """Show window with all transcript files"""
+        transcript_window = tk.Toplevel(self.root)
+        transcript_window.title("📋 Todas as Transcrições")
+        transcript_window.geometry("800x600")
+        transcript_window.transient(self.root)
+
+        # Center the window
+        transcript_window.geometry(
+            "+%d+%d" % (self.root.winfo_rootx() + 100, self.root.winfo_rooty() + 50)
+        )
+
+        # Title
+        tk.Label(
+            transcript_window,
+            text="📋 Transcrições de Reuniões",
+            font=("Arial", 16, "bold"),
+        ).pack(pady=10)
+
+        # Create frame for file list
+        list_frame = tk.Frame(transcript_window)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+        # Create treeview for file listing
+        columns = ("Nome", "Data", "Tamanho", "Caminho")
+        transcript_tree = ttk.Treeview(
+            list_frame, columns=columns, show="headings", height=15
+        )
+
+        # Configure columns
+        transcript_tree.heading("Nome", text="Nome do Arquivo")
+        transcript_tree.heading("Data", text="Data de Criação")
+        transcript_tree.heading("Tamanho", text="Tamanho")
+        transcript_tree.heading("Caminho", text="Caminho Completo")
+
+        transcript_tree.column("Nome", width=200)
+        transcript_tree.column("Data", width=150)
+        transcript_tree.column("Tamanho", width=100)
+        transcript_tree.column("Caminho", width=300)
+
+        # Scrollbar for treeview
+        tree_scroll = ttk.Scrollbar(
+            list_frame, orient=tk.VERTICAL, command=transcript_tree.yview
+        )
+        transcript_tree.configure(yscrollcommand=tree_scroll.set)
+
+        transcript_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Buttons frame
+        button_frame = tk.Frame(transcript_window)
+        button_frame.pack(fill=tk.X, padx=20, pady=10)
+
+        tk.Button(
+            button_frame,
+            text="🔄 Atualizar Lista",
+            command=lambda: self.refresh_transcript_list(transcript_tree),
+            font=("Arial", 10),
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            button_frame,
+            text="📄 Abrir Selecionado",
+            command=lambda: self.open_selected_file(transcript_tree),
+            font=("Arial", 10),
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            button_frame,
+            text="🤖 Gerar Ata",
+            command=lambda: self.generate_ata_from_selected(transcript_tree),
+            font=("Arial", 10),
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            button_frame,
+            text="🗑️ Excluir",
+            command=lambda: self.delete_selected_transcript(transcript_tree),
+            font=("Arial", 10),
+            bg="#f44336",
+            fg="white",
+        ).pack(side=tk.RIGHT, padx=5)
+
+        tk.Button(
+            button_frame,
+            text="❌ Fechar",
+            command=transcript_window.destroy,
+            font=("Arial", 10),
+        ).pack(side=tk.RIGHT, padx=5)
+
+        # Load transcript files
+        self.refresh_transcript_list(transcript_tree)
+
+    def view_all_atas(self):
+        """Show window with all ata (meeting minutes) files"""
+        ata_window = tk.Toplevel(self.root)
+        ata_window.title("📝 Todas as Atas")
+        ata_window.geometry("800x600")
+        ata_window.transient(self.root)
+
+        # Center the window
+        ata_window.geometry(
+            "+%d+%d" % (self.root.winfo_rootx() + 120, self.root.winfo_rooty() + 70)
+        )
+
+        # Title
+        tk.Label(
+            ata_window, text="📝 Atas de Reuniões Geradas", font=("Arial", 16, "bold")
+        ).pack(pady=10)
+
+        # Create frame for file list
+        list_frame = tk.Frame(ata_window)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+        # Create treeview for file listing
+        columns = ("Nome", "Data", "Tamanho", "Transcrição Original", "Caminho")
+        ata_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
+
+        # Configure columns
+        ata_tree.heading("Nome", text="Nome da Ata")
+        ata_tree.heading("Data", text="Data de Criação")
+        ata_tree.heading("Tamanho", text="Tamanho")
+        ata_tree.heading("Transcrição Original", text="Transcrição Original")
+        ata_tree.heading("Caminho", text="Caminho Completo")
+
+        ata_tree.column("Nome", width=200)
+        ata_tree.column("Data", width=150)
+        ata_tree.column("Tamanho", width=100)
+        ata_tree.column("Transcrição Original", width=200)
+        ata_tree.column("Caminho", width=300)
+
+        # Scrollbar for treeview
+        tree_scroll = ttk.Scrollbar(
+            list_frame, orient=tk.VERTICAL, command=ata_tree.yview
+        )
+        ata_tree.configure(yscrollcommand=tree_scroll.set)
+
+        ata_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Buttons frame
+        button_frame = tk.Frame(ata_window)
+        button_frame.pack(fill=tk.X, padx=20, pady=10)
+
+        tk.Button(
+            button_frame,
+            text="🔄 Atualizar Lista",
+            command=lambda: self.refresh_ata_list(ata_tree),
+            font=("Arial", 10),
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            button_frame,
+            text="📄 Abrir Selecionado",
+            command=lambda: self.open_selected_file(ata_tree),
+            font=("Arial", 10),
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            button_frame,
+            text="📋 Ver Transcrição Original",
+            command=lambda: self.open_original_transcript(ata_tree),
+            font=("Arial", 10),
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            button_frame,
+            text="🗑️ Excluir",
+            command=lambda: self.delete_selected_ata(ata_tree),
+            font=("Arial", 10),
+            bg="#f44336",
+            fg="white",
+        ).pack(side=tk.RIGHT, padx=5)
+
+        tk.Button(
+            button_frame,
+            text="❌ Fechar",
+            command=ata_window.destroy,
+            font=("Arial", 10),
+        ).pack(side=tk.RIGHT, padx=5)
+
+        # Load ata files
+        self.refresh_ata_list(ata_tree)
+
+    def refresh_transcript_list(self, tree):
+        """Refresh the transcript file list"""
+        # Clear existing items
+        for item in tree.get_children():
+            tree.delete(item)
+
+        # Search for transcript files
+        transcript_files = []
+        search_dirs = ["src/output", "."]
+
+        for search_dir in search_dirs:
+            if os.path.exists(search_dir):
+                for file in os.listdir(search_dir):
+                    if (
+                        file.endswith(".md")
+                        and "meeting_transcripts_" in file
+                        and "_ata" not in file
+                    ):
+                        file_path = os.path.join(search_dir, file)
+                        transcript_files.append(file_path)
+
+        # Add files to tree
+        for file_path in sorted(
+            transcript_files, key=lambda x: os.path.getmtime(x), reverse=True
+        ):
+            try:
+                file_name = os.path.basename(file_path)
+                file_size = f"{os.path.getsize(file_path) / 1024:.1f} KB"
+                file_date = datetime.fromtimestamp(
+                    os.path.getmtime(file_path)
+                ).strftime("%Y-%m-%d %H:%M")
+
+                tree.insert(
+                    "", "end", values=(file_name, file_date, file_size, file_path)
+                )
+            except Exception as e:
+                print(f"Error processing file {file_path}: {e}")
+
+    def refresh_ata_list(self, tree):
+        """Refresh the ata file list"""
+        # Clear existing items
+        for item in tree.get_children():
+            tree.delete(item)
+
+        # Search for ata files
+        ata_files = []
+        search_dirs = ["src/output", "."]
+
+        for search_dir in search_dirs:
+            if os.path.exists(search_dir):
+                for file in os.listdir(search_dir):
+                    if file.endswith(".md") and "_ata" in file:
+                        file_path = os.path.join(search_dir, file)
+                        ata_files.append(file_path)
+
+        # Add files to tree
+        for file_path in sorted(
+            ata_files, key=lambda x: os.path.getmtime(x), reverse=True
+        ):
+            try:
+                file_name = os.path.basename(file_path)
+                file_size = f"{os.path.getsize(file_path) / 1024:.1f} KB"
+                file_date = datetime.fromtimestamp(
+                    os.path.getmtime(file_path)
+                ).strftime("%Y-%m-%d %H:%M")
+
+                # Find original transcript file
+                original_transcript = file_name.replace("_ata.md", ".md")
+                original_path = os.path.join(
+                    os.path.dirname(file_path), original_transcript
+                )
+                if not os.path.exists(original_path):
+                    original_transcript = "Não encontrado"
+
+                tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        file_name,
+                        file_date,
+                        file_size,
+                        original_transcript,
+                        file_path,
+                    ),
+                )
+            except Exception as e:
+                print(f"Error processing file {file_path}: {e}")
+
+    def open_selected_file(self, tree):
+        """Open the selected file in the default application"""
+        selection = tree.selection()
+        if not selection:
+            messagebox.showwarning("Seleção", "Por favor, selecione um arquivo.")
+            return
+
+        # Get file path from the last column
+        item = tree.item(selection[0])
+        file_path = item["values"][-1]  # Last column contains the path
+
+        try:
+            if os.name == "nt":  # Windows
+                os.startfile(file_path)
+            elif os.name == "posix":  # macOS and Linux
+                import subprocess
+
+                subprocess.call(["open", file_path])
+        except Exception as e:
+            messagebox.showerror("Erro", f"Não foi possível abrir o arquivo:\n{e}")
+
+    def generate_ata_from_selected(self, tree):
+        """Generate ata from selected transcript"""
+        selection = tree.selection()
+        if not selection:
+            messagebox.showwarning("Seleção", "Por favor, selecione uma transcrição.")
+            return
+
+        # Get file path from the last column
+        item = tree.item(selection[0])
+        file_path = item["values"][-1]  # Last column contains the path
+
+        self.generate_meeting_minutes_from_file(file_path)
+
+    def open_original_transcript(self, tree):
+        """Open the original transcript for the selected ata"""
+        selection = tree.selection()
+        if not selection:
+            messagebox.showwarning("Seleção", "Por favor, selecione uma ata.")
+            return
+
+        # Get ata file path
+        item = tree.item(selection[0])
+        ata_file_path = item["values"][-1]  # Last column contains the path
+
+        # Calculate original transcript path
+        original_path = ata_file_path.replace("_ata.md", ".md")
+
+        if os.path.exists(original_path):
+            try:
+                if os.name == "nt":  # Windows
+                    os.startfile(original_path)
+                elif os.name == "posix":  # macOS and Linux
+                    import subprocess
+
+                    subprocess.call(["open", original_path])
+            except Exception as e:
+                messagebox.showerror("Erro", f"Não foi possível abrir o arquivo:\n{e}")
+        else:
+            messagebox.showerror(
+                "Erro", "Arquivo de transcrição original não encontrado."
+            )
+
+    def delete_selected_transcript(self, tree):
+        """Delete selected transcript file"""
+        selection = tree.selection()
+        if not selection:
+            messagebox.showwarning("Seleção", "Por favor, selecione uma transcrição.")
+            return
+
+        # Get file info
+        item = tree.item(selection[0])
+        file_name = item["values"][0]
+        file_path = item["values"][-1]
+
+        # Confirm deletion
+        response = messagebox.askyesno(
+            "Confirmar Exclusão",
+            f"Tem certeza que deseja excluir a transcrição?\n\n"
+            f"📄 Arquivo: {file_name}\n"
+            f"⚠️ Esta ação não pode ser desfeita.",
+        )
+
+        if response:
+            try:
+                os.remove(file_path)
+                messagebox.showinfo("Sucesso", "Transcrição excluída com sucesso!")
+                self.refresh_transcript_list(tree)
+            except Exception as e:
+                messagebox.showerror(
+                    "Erro", f"Não foi possível excluir o arquivo:\n{e}"
+                )
+
+    def delete_selected_ata(self, tree):
+        """Delete selected ata file"""
+        selection = tree.selection()
+        if not selection:
+            messagebox.showwarning("Seleção", "Por favor, selecione uma ata.")
+            return
+
+        # Get file info
+        item = tree.item(selection[0])
+        file_name = item["values"][0]
+        file_path = item["values"][-1]
+
+        # Confirm deletion
+        response = messagebox.askyesno(
+            "Confirmar Exclusão",
+            f"Tem certeza que deseja excluir a ata?\n\n"
+            f"📄 Arquivo: {file_name}\n"
+            f"⚠️ Esta ação não pode ser desfeita.",
+        )
+
+        if response:
+            try:
+                os.remove(file_path)
+                messagebox.showinfo("Sucesso", "Ata excluída com sucesso!")
+                self.refresh_ata_list(tree)
+            except Exception as e:
+                messagebox.showerror(
+                    "Erro", f"Não foi possível excluir o arquivo:\n{e}"
+                )
 
 
 def create_gui():
