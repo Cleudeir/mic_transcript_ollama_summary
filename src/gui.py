@@ -3418,7 +3418,7 @@ class MicrophoneTranscriberGUI:
    • Audio is captured continuously without pauses
 
 3. TRANSCRIPTS:
-   • View results in the Combined View, Logs, or Transcripts tabs
+   • View results in the Transcripts, Logs, or Files tabs
    • Transcripts are automatically saved to markdown files in real-time
    • Transcripts include timestamps and device identification
 
