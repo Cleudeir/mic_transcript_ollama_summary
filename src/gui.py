@@ -83,32 +83,13 @@ class MicrophoneTranscriberGUI:
         )
         self.listen_btn.pack(side=tk.LEFT, padx=5)
 
-        # Auto-save status label
-        self.auto_save_label = tk.Label(
-            button_frame,
-            text=t("auto_save_off", "Auto-save: OFF"),
-            font=("Arial", 8),
-            fg="gray",
-        )
-        self.auto_save_label.pack(side=tk.LEFT, padx=5)
-
-        # Ollama status label
-        self.ollama_status_label = tk.Label(
-            button_frame,
-            text=t("ollama_checking", "🌐 Ollama Remote: Checking..."),
-            font=("Arial", 8),
-            fg="orange",
-        )
-        self.ollama_status_label.pack(side=tk.LEFT, padx=5)
-
         # Create notebook for tabbed interface
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
 
         # Create tabs for different views
-        self.create_combined_tab()
-        self.create_logs_tab()
         self.create_transcripts_tab()
+        self.create_logs_tab()
         self.create_transcript_files_tab()
         self.create_ata_files_tab()
         self.create_mic_config_tab()
@@ -333,26 +314,6 @@ class MicrophoneTranscriberGUI:
 
         # Bind double-click to select/deselect
         self.mic_tree.bind("<Double-1>", self.on_mic_double_click)
-
-    def create_combined_tab(self):
-        """Create the combined view tab showing both logs and transcripts"""
-        combined_frame = ttk.Frame(self.notebook)
-        self.notebook.add(combined_frame, text=t("tab_combined", "📊 Combined View"))
-
-        # Combined output area
-        combined_text_frame = tk.Frame(combined_frame)
-        combined_text_frame.pack(pady=5, padx=10, fill=tk.BOTH, expand=True)
-
-        self.combined_output = tk.Text(
-            combined_text_frame, height=20, width=100, wrap=tk.WORD
-        )
-        combined_scrollbar = tk.Scrollbar(
-            combined_text_frame, orient=tk.VERTICAL, command=self.combined_output.yview
-        )
-        self.combined_output.configure(yscrollcommand=combined_scrollbar.set)
-
-        self.combined_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        combined_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def create_logs_tab(self):
         """Create the logs tab showing system messages and status"""
@@ -2103,11 +2064,7 @@ class MicrophoneTranscriberGUI:
             self.markdown_file.write("## Live Transcript\n")
             self.markdown_file.flush()
 
-            # Update UI
-            self.auto_save_label.config(
-                text=f"{t('auto_save_on', 'Auto-save: ON')} ({os.path.basename(self.markdown_file_path)})",
-                fg="green",
-            )
+            # Update UI - Status in status bar only
             self.status_var.set(f"Real-time saving to: {self.markdown_file_path}")
 
         except Exception as e:
@@ -2138,8 +2095,7 @@ class MicrophoneTranscriberGUI:
                 self.markdown_file.close()
                 self.markdown_file = None
 
-                # Update UI
-                self.auto_save_label.config(text=t("auto_save_off", "Auto-save: OFF"), fg="gray")
+                # Update UI - Status in status bar only
                 self.status_var.set(f"Session saved to: {self.markdown_file_path}")
 
                 # Ask user if they want to generate meeting minutes with Ollama
@@ -2328,7 +2284,6 @@ class MicrophoneTranscriberGUI:
         """Set up the mapping between device indices and output text widgets"""
         # This will be called after microphones are loaded to set up the output mapping
         self.output_widgets = {
-            "combined": self.combined_output,
             "mic1_log": self.mic1_log_text,
             "mic2_log": self.mic2_log_text,
             "mic1_transcript": self.mic1_transcript_text,
@@ -2448,7 +2403,6 @@ class MicrophoneTranscriberGUI:
 
     def clear_all_output(self):
         """Clear all output text areas"""
-        self.combined_output.delete(1.0, tk.END)
         self.mic1_log_text.delete(1.0, tk.END)
         self.mic2_log_text.delete(1.0, tk.END)
         self.mic1_transcript_text.delete(1.0, tk.END)
@@ -2585,10 +2539,6 @@ class MicrophoneTranscriberGUI:
         # Update UI
         self.listen_btn.config(text=t("start_button", "🎤 Start"), bg="#4CAF50")
         self.status_var.set("Continuous recording stopped - transcripts auto-saved")
-
-        # Add log message
-        self.combined_output.insert(tk.END, "\n=== RECORDING STOPPED ===\n")
-        self.combined_output.see(tk.END)
 
         # Refresh files list if files tab exists
         if hasattr(self, "files_listbox"):
@@ -2734,12 +2684,6 @@ class MicrophoneTranscriberGUI:
         start_event = threading.Event()
         threads = []
 
-        # Add initial message to combined view
-        self.combined_output.insert(
-            tk.END, "Preparing to record from both microphones simultaneously...\n"
-        )
-        self.combined_output.update()
-
         # Start all threads
         for idx in selected_indices:
             t = threading.Thread(
@@ -2768,7 +2712,6 @@ class MicrophoneTranscriberGUI:
             self.status_var.set("Done.")
         except Exception as e:
             self.status_var.set(f"Error: {e}")
-            self.combined_output.insert(tk.END, f"Error during recording: {str(e)}\n")
         finally:
             self.listen_btn.config(state=tk.NORMAL, text="🎤 Listen & Transcribe")
             self.root.update()
@@ -3606,10 +3549,11 @@ with focus on continuous, uninterrupted operation.
             pass
 
     def _update_ollama_label_if_valid(self, text, color):
-        """Update the Ollama label only if it's still valid"""
+        """Update the Ollama status in status bar only"""
         try:
-            if not self.is_shutting_down and hasattr(self, "ollama_status_label"):
-                self.ollama_status_label.config(text=text, fg=color)
+            if not self.is_shutting_down:
+                # Show Ollama status in main status bar instead
+                self.status_var.set(text)
         except Exception:
             # Silently handle any errors during shutdown
             pass
