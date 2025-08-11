@@ -27,6 +27,10 @@ class MicrophoneTranscriberGUI:
         self.root = tk.Tk()
         self.root.title("Microphone Selector & Transcriber")
         self.root.geometry("900x700")
+        
+        # Initialize configuration early
+        self.config_file = "mic_config.json"
+        
         # Recording state
         self.is_recording = False
         # Microphone variables for selection
@@ -95,9 +99,8 @@ class MicrophoneTranscriberGUI:
         self.setup_output_mapping()
 
         # Initialize missing components
-        self.config_file = "mic_config.json"
         self.ollama_service = OllamaService()
-        
+
         # Load and ensure main config exists with defaults
         self.config = self.load_main_config()
         self.ensure_config_file_exists()
@@ -541,7 +544,7 @@ class MicrophoneTranscriberGUI:
     def create_mic_config_tab(self):
         """Create the microphone configuration tab"""
         mic_config_frame = ttk.Frame(self.notebook)
-        self.notebook.add(mic_config_frame, text="🎤 Microphone Config")
+        self.notebook.add(mic_config_frame, text="🎤 Microphone Selection")
 
         # Create main container with scrollable frame
         canvas = tk.Canvas(mic_config_frame)
@@ -808,7 +811,7 @@ class MicrophoneTranscriberGUI:
         try:
             selected_indices = [idx for var, idx in self.mic_vars if var.get()]
             selected_with_names = []
-            
+
             # Get names for selected microphones
             for idx in selected_indices:
                 for mic_idx, mic_name in self.mics:
@@ -826,12 +829,16 @@ class MicrophoneTranscriberGUI:
 
             # Save microphone configuration
             self.save_microphone_config(selected_with_names)
-            
+
             # Update status
             if len(selected_with_names) == 2:
-                self.status_var.set(f"Selected: {selected_with_names[0][1][:20]}... & {selected_with_names[1][1][:20]}...")
+                self.status_var.set(
+                    f"Selected: {selected_with_names[0][1][:20]}... & {selected_with_names[1][1][:20]}..."
+                )
             elif len(selected_with_names) == 1:
-                self.status_var.set(f"Selected: {selected_with_names[0][1][:30]}... (select 1 more)")
+                self.status_var.set(
+                    f"Selected: {selected_with_names[0][1][:30]}... (select 1 more)"
+                )
             else:
                 self.status_var.set("Select exactly 2 microphones to start recording")
 
@@ -1610,7 +1617,9 @@ class MicrophoneTranscriberGUI:
             try:
                 with open(config_path, "w", encoding="utf-8") as f:
                     json.dump(self.config, f, indent=4, ensure_ascii=False)
-                self.status_var.set("Created default config.json with Ollama URL: http://localhost:11434")
+                self.status_var.set(
+                    "Created default config.json with Ollama URL: http://localhost:11434"
+                )
             except Exception as e:
                 self.status_var.set(f"Error creating config file: {e}")
 
