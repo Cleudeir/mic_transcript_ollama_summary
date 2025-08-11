@@ -31,8 +31,8 @@ class OllamaService:
         )
         self.logger = logging.getLogger(__name__)
 
-        # Configure Ollama client with custom base URL
-        self.client = ollama.Client(host=self.base_url)
+        # Configure Ollama client with custom base URL and timeout
+        self.client = ollama.Client(host=self.base_url, timeout=30)
 
     def _load_config(self) -> dict:
         """Load configuration from config.json file"""
@@ -83,8 +83,8 @@ class OllamaService:
         if ollama_url is not None:
             config.setdefault("ollama", {})["base_url"] = ollama_url
             self.base_url = ollama_url
-            # Reinitialize client with new URL
-            self.client = ollama.Client(host=self.base_url)
+            # Reinitialize client with new URL and timeout
+            self.client = ollama.Client(host=self.base_url, timeout=30)
 
         if model_name is not None:
             config.setdefault("ollama", {})["model_name"] = model_name
@@ -100,8 +100,10 @@ class OllamaService:
             bool: True if Ollama is available, False otherwise
         """
         try:
+            # Create a temporary client with shorter timeout for testing
+            test_client = ollama.Client(host=self.base_url, timeout=10)
             # List available models to test connection
-            models = self.client.list()
+            models = test_client.list()
             return True
         except Exception as e:
             self.logger.error(f"Ollama not available at {self.base_url}: {e}")

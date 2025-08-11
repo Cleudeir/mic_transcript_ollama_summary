@@ -504,68 +504,6 @@ class MicrophoneTranscriberGUI:
         )
         open_transcript_folder_btn.pack(side=tk.RIGHT)
 
-        # Generate ATA section
-        ata_generation_section = ttk.LabelFrame(
-            main_container, text="🤖 Generate Meeting Minutes (ATA)", padding=10
-        )
-        ata_generation_section.pack(fill=tk.X, pady=(5, 0))
-
-        # ATA generation controls
-        ata_controls_frame = tk.Frame(ata_generation_section)
-        ata_controls_frame.pack(fill=tk.X)
-
-        tk.Label(
-            ata_controls_frame,
-            text="Select transcript file to generate ATA:",
-            font=("Arial", 10, "bold"),
-        ).pack(anchor=tk.W, pady=(0, 5))
-
-        # File selection frame
-        file_select_frame = tk.Frame(ata_controls_frame)
-        file_select_frame.pack(fill=tk.X, pady=(0, 5))
-
-        self.selected_transcript_var = tk.StringVar()
-        self.selected_transcript_label = tk.Label(
-            file_select_frame,
-            textvariable=self.selected_transcript_var,
-            bg="#f5f5f5",
-            relief="sunken",
-            anchor="w",
-        )
-        self.selected_transcript_label.pack(
-            side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 5), pady=5
-        )
-
-        select_transcript_btn = tk.Button(
-            file_select_frame,
-            text="📁 Select File",
-            command=self.select_transcript_file,
-            bg="#e3f2fd",
-            relief="groove",
-        )
-        select_transcript_btn.pack(side=tk.RIGHT)
-
-        # Generate button
-        generate_ata_btn = tk.Button(
-            ata_controls_frame,
-            text="🤖 Generate Meeting Minutes",
-            command=self.generate_ata_from_file,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 10, "bold"),
-            relief="groove",
-        )
-        generate_ata_btn.pack(pady=(10, 0))
-
-        # ATA status
-        self.transcript_ata_status_label = tk.Label(
-            ata_controls_frame,
-            text="Select a transcript file to generate meeting minutes",
-            font=("Arial", 9),
-            fg="gray",
-        )
-        self.transcript_ata_status_label.pack(pady=(5, 0))
-
         # Initialize transcript files list
         self.refresh_transcript_files_list()
 
@@ -1656,14 +1594,11 @@ class MicrophoneTranscriberGUI:
             ):
                 return
 
-            # Set the selected file path and generate ATA
+            # Set the selected file path and generate ATA directly
             self.selected_transcript_path = transcript_path
-            self.selected_transcript_var.set(filename)
-            self.transcript_ata_status_label.config(
-                text="File selected. Generating ATA...", fg="orange"
-            )
+            self.status_var.set("Generating ATA...")
             
-            # Generate ATA
+            # Generate ATA directly
             self.generate_ata_from_file()
 
         except Exception as e:
@@ -1691,11 +1626,8 @@ class MicrophoneTranscriberGUI:
             )
 
             if file_path:
-                self.selected_transcript_var.set(os.path.basename(file_path))
+                self.status_var.set(f"Selected: {os.path.basename(file_path)}")
                 self.selected_transcript_path = file_path
-                self.transcript_ata_status_label.config(
-                    text="File selected. Click Generate to create ATA.", fg="blue"
-                )
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to select file: {e}")
@@ -1716,9 +1648,23 @@ class MicrophoneTranscriberGUI:
                 messagebox.showerror("Error", "Selected file no longer exists")
                 return
 
-            self.transcript_ata_status_label.config(
-                text="Generating meeting minutes...", fg="orange"
-            )
+            # First, validate Ollama connection
+            self.status_var.set("🔍 Checking Ollama connection...")
+            self.root.update_idletasks()
+
+            if not self.ollama_service.is_ollama_available():
+                self.status_var.set("❌ Ollama service not available")
+                messagebox.showerror(
+                    "Connection Error", 
+                    f"Cannot connect to Ollama service at {self.ollama_service.base_url}\n\n"
+                    "Please check:\n"
+                    "1. Ollama is running\n"
+                    "2. The URL in config is correct\n"
+                    "3. Network connectivity"
+                )
+                return
+
+            self.status_var.set("🤖 Generating meeting minutes...")
             self.root.update_idletasks()
 
             # Generate output file name in ATA directory
@@ -1736,17 +1682,36 @@ class MicrophoneTranscriberGUI:
 
             output_path = os.path.join(ata_dir, output_name)
 
-            # Generate ATA using Ollama service
-            result = self.ollama_service.generate_and_save_minutes(
-                self.selected_transcript_path,
-                output_path,
-                self.config.get("language", "pt-BR"),
-            )
+            # Run ATA generation in a separate thread to avoid UI freezing
+            def generate_in_thread():
+                try:
+                    result = self.ollama_service.generate_and_save_minutes(
+                        self.selected_transcript_path,
+                        output_path,
+                        self.config.get("language", "pt-BR"),
+                    )
+                    
+                    # Update UI from main thread
+                    self.root.after(0, lambda: self._handle_ata_generation_result(result, output_name, output_path))
+                    
+                except Exception as e:
+                    # Handle errors from main thread
+                    error_msg = str(e)
+                    self.root.after(0, lambda: self._handle_ata_generation_error(error_msg))
 
+            # Start generation in background thread
+            generation_thread = threading.Thread(target=generate_in_thread, daemon=True)
+            generation_thread.start()
+
+        except Exception as e:
+            self.status_var.set(f"❌ Error: {str(e)[:50]}...")
+            messagebox.showerror("Error", f"Failed to start ATA generation: {e}")
+
+    def _handle_ata_generation_result(self, result, output_name, output_path):
+        """Handle ATA generation result in main thread"""
+        try:
             if result.get("success"):
-                self.transcript_ata_status_label.config(
-                    text=f"✅ ATA generated: {output_name}", fg="green"
-                )
+                self.status_var.set(f"✅ ATA generated: {output_name}")
                 self.refresh_ata_files_list()
 
                 # Ask if user wants to open the generated file
@@ -1757,16 +1722,20 @@ class MicrophoneTranscriberGUI:
                     self.open_file(output_path)
             else:
                 error_msg = result.get("error", "Unknown error")
-                self.transcript_ata_status_label.config(
-                    text=f"❌ Generation failed: {error_msg[:50]}...", fg="red"
-                )
+                self.status_var.set(f"❌ Generation failed: {error_msg[:50]}...")
                 messagebox.showerror(
                     "Error", f"Failed to generate meeting minutes:\n{error_msg}"
                 )
-
         except Exception as e:
-            self.transcript_ata_status_label.config(text=f"❌ Error: {str(e)[:50]}...", fg="red")
-            messagebox.showerror("Error", f"Failed to generate ATA: {e}")
+            self.status_var.set(f"❌ Error: {str(e)[:50]}...")
+
+    def _handle_ata_generation_error(self, error_msg):
+        """Handle ATA generation error in main thread"""
+        try:
+            self.status_var.set(f"❌ Error: {error_msg[:50]}...")
+            messagebox.showerror("Error", f"Failed to generate ATA:\n{error_msg}")
+        except Exception as e:
+            print(f"Error handling ATA generation error: {e}")
 
     def open_file(self, file_path):
         """Open a file with the default system application"""
