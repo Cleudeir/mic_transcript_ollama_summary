@@ -5,7 +5,7 @@ Centralized configuration to manage all timing and audio parameters.
 
 # Audio Capture Settings
 CHUNK_DURATION = 10  # Duration in seconds for each audio chunk
-OVERLAP_DURATION = CHUNK_DURATION * 0.05  # Overlap duration in seconds
+OVERLAP_DURATION = 1  # Overlap duration in seconds
 SILENCE_THRESHOLD = 50  # Minimum amplitude to consider as meaningful audio
 
 # Audio Quality Settings

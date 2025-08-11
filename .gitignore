@@ -1,6 +1,31 @@
+# Python
 .venv
 __pycache__
-/src/output/*
 *.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Project specific
+/src/output/*
 /build
 /dist
+
+# Test files (should not be created per project guidelines)
+test_*.py
+*_test.py
+tests/
+pytest.ini
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
