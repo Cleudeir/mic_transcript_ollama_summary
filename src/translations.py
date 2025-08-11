@@ -22,7 +22,7 @@ TRANSLATIONS = {
         # Tab Names
         "tab_combined": "📊 Logs & Transcrições",
         "tab_logs": "📋 Logs Apenas",
-        "tab_transcripts": "📄 Transcrições Apenas",
+        "tab_transcripts": "📄 Transcrições",
         "tab_transcript_files": "📁 Arquivos de Transcrição",
         "tab_ata_files": "📝 Arquivos de Ata",
         "tab_mic_config": "🎤 Configuração do Microfone",
