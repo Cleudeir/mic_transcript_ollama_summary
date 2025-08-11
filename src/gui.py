@@ -98,6 +98,9 @@ class MicrophoneTranscriberGUI:
         # Initialize Ollama connection and load models on startup
         self.root.after(1000, self.initialize_ollama_on_startup)
 
+        # Auto-start recording after everything is initialized
+        self.root.after(3000, self.auto_start_recording)
+
         # Status bar (display at bottom)
         self.status_label = tk.Label(
             self.root,
@@ -2307,7 +2310,6 @@ class MicrophoneTranscriberGUI:
         mic_position = "mic1" if device_index == selected_indices[0] else "mic2"
 
         return {
-            "combined": self.output_widgets["combined"],
             "log": self.output_widgets[f"{mic_position}_log"],
             "transcript": self.output_widgets[f"{mic_position}_transcript"],
         }
@@ -2321,10 +2323,6 @@ class MicrophoneTranscriberGUI:
 
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         log_message = f"[{timestamp}] {message}\n"
-
-        # Add to combined view
-        widgets["combined"].insert(tk.END, f"Device {device_index}: {log_message}")
-        widgets["combined"].see(tk.END)
 
         # Add to device-specific log
         widgets["log"].insert(tk.END, log_message)
@@ -2342,12 +2340,6 @@ class MicrophoneTranscriberGUI:
 
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         transcript_message = f"[{timestamp}] {transcript}\n"
-
-        # Add to combined view
-        widgets["combined"].insert(
-            tk.END, f"Device {device_index} TRANSCRIPT: {transcript_message}"
-        )
-        widgets["combined"].see(tk.END)
 
         # Add to device-specific transcript area
         widgets["transcript"].insert(tk.END, transcript_message)
@@ -2472,6 +2464,24 @@ class MicrophoneTranscriberGUI:
             # Log exceptions but don't block the pipeline
             self.add_log_message(device_index, f"❌ Exception: {e}", selected_indices)
 
+    def auto_start_recording(self):
+        """Automatically start recording if microphones are configured"""
+        try:
+            # Check if microphones are configured
+            selected = [idx for var, idx in self.mic_vars if var.get()]
+            
+            if len(selected) == 2:
+                self.status_var.set("Auto-starting recording...")
+                self.root.update_idletasks()
+                
+                # Start recording automatically
+                self.start_realtime_recording()
+            else:
+                self.status_var.set(f"Auto-start requires exactly 2 microphones configured. Found: {len(selected)}")
+                
+        except Exception as e:
+            self.status_var.set(f"Auto-start failed: {e}")
+
     def toggle_recording(self):
         """Toggle between start and stop recording"""
         if not self.is_recording:
@@ -2505,7 +2515,6 @@ class MicrophoneTranscriberGUI:
 
             # Update UI state
             self.is_recording = True
-            self.listen_btn.config(text=t("stop_button", "🛑 Stop"), bg="#f44336")
             self.status_var.set("Continuous recording active - audio never stops...")
 
             # Start real-time markdown saving
@@ -2548,7 +2557,6 @@ class MicrophoneTranscriberGUI:
         self.auto_save_transcripts()
 
         # Update UI
-        self.listen_btn.config(text=t("start_button", "🎤 Start"), bg="#4CAF50")
         self.status_var.set("Continuous recording stopped - transcripts auto-saved")
 
         # Refresh files list if files tab exists
@@ -2715,7 +2723,6 @@ class MicrophoneTranscriberGUI:
         """Run listening in a separate thread"""
         try:
             self.status_var.set("Listening...")
-            self.listen_btn.config(state=tk.DISABLED, text="🎤 Recording...")
             self.root.update()
 
             self.start_listening(selected)
@@ -2724,7 +2731,6 @@ class MicrophoneTranscriberGUI:
         except Exception as e:
             self.status_var.set(f"Error: {e}")
         finally:
-            self.listen_btn.config(state=tk.NORMAL, text="🎤 Listen & Transcribe")
             self.root.update()
 
     def on_listen(self):
