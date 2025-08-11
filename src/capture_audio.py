@@ -3,6 +3,22 @@ import numpy as np
 import threading
 import tkinter as tk
 import time
+from .config import (
+    CHUNK_DURATION,
+    OVERLAP_DURATION,
+    SILENCE_THRESHOLD,
+    MICROPHONE_TEST_DURATION,
+    MICROPHONE_ACTIVITY_THRESHOLD,
+    DEFAULT_RECORDING_DURATION,
+    AUDIO_BLOCKSIZE,
+    AUDIO_LATENCY,
+    AUDIO_SLEEP_INTERVAL,
+    ERROR_SLEEP_INTERVAL,
+    get_overlap_samples,
+    get_chunk_samples,
+    get_test_samples,
+    get_recording_samples,
+)
 
 
 def is_microphone_active(device_index):
@@ -15,7 +31,7 @@ def is_microphone_active(device_index):
         # Try to record a very short sample to test if mic is working
         samplerate = int(device_info["default_samplerate"])
         test_audio = sd.rec(
-            int(0.1 * samplerate),  # 0.1 second test
+            get_test_samples(samplerate),  # Use config for test duration
             samplerate=samplerate,
             channels=1,
             dtype="int16",
@@ -24,7 +40,7 @@ def is_microphone_active(device_index):
         sd.wait()
 
         # Check if we got any audio data (not just silence)
-        if np.max(np.abs(test_audio)) > 100:  # Some threshold for activity
+        if np.max(np.abs(test_audio)) > MICROPHONE_ACTIVITY_THRESHOLD:
             return True
         return True  # Even if silent, if no error occurred, consider it active
     except Exception:
@@ -58,22 +74,25 @@ def get_microphone_list():
     return active_mics
 
 
-def capture_audio(device_index, duration=20):
+def capture_audio(device_index, duration=None):
     """
     Capture audio from a specific microphone device
 
     Args:
         device_index (int): The index of the audio device
-        duration (int): Duration in seconds to record
+        duration (int): Duration in seconds to record (uses config default if None)
 
     Returns:
         tuple: (audio_data, samplerate) or (None, None) if error
     """
+    if duration is None:
+        duration = DEFAULT_RECORDING_DURATION
+
     try:
         samplerate = int(sd.query_devices(device_index)["default_samplerate"])
 
         audio = sd.rec(
-            int(duration * samplerate),
+            get_recording_samples(samplerate, duration),
             samplerate=samplerate,
             channels=1,
             dtype="int16",
@@ -87,9 +106,11 @@ def capture_audio(device_index, duration=20):
         return None, None
 
 
-def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_duration=10):
+def capture_audio_realtime(
+    device_index, on_audio_chunk, stop_event, chunk_duration=None
+):
     """
-    Capture audio in real-time with 10-second samples and 200ms overlap for continuity
+    Capture audio in real-time with configured samples and overlap for continuity
     Audio capture never pauses - transcription happens in parallel
     Never loses conversation by maintaining overlap between chunks
 
@@ -97,12 +118,15 @@ def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_durat
         device_index (int): The index of the audio device
         on_audio_chunk: Callback function to call with each audio chunk
         stop_event: Threading event to signal when to stop recording
-        chunk_duration (int): Duration in seconds for each audio chunk (default 10s)
+        chunk_duration (float): Duration in seconds for each audio chunk (uses config default if None)
     """
+    if chunk_duration is None:
+        chunk_duration = CHUNK_DURATION
+
     try:
         samplerate = int(sd.query_devices(device_index)["default_samplerate"])
-        chunk_samples = int(chunk_duration * samplerate)
-        overlap_samples = int(0.2 * samplerate)  # 200ms overlap
+        chunk_samples = get_recording_samples(samplerate, chunk_duration)
+        overlap_samples = get_recording_samples(samplerate, OVERLAP_DURATION)
 
         # Continuous audio buffer - never stops collecting
         audio_buffer = []
@@ -134,24 +158,24 @@ def capture_audio_realtime(device_index, on_audio_chunk, stop_event, chunk_durat
 
             while not stop_event.is_set():
                 try:
-                    # Check if we have enough audio data for a new 10-second chunk
+                    # Check if we have enough audio data for a new chunk
                     with buffer_lock:
                         buffer_length = len(audio_buffer)
 
                     if buffer_length >= chunk_samples:
-                        # Extract 10-second chunk from buffer without stopping audio capture
+                        # Extract chunk from buffer without stopping audio capture
                         with buffer_lock:
                             audio_chunk = np.array(
                                 audio_buffer[:chunk_samples], dtype=np.int16
                             )
-                            # Keep 200ms overlap to never lose conversation
-                            # Remove everything except the last 200ms for next chunk continuity
+                            # Keep overlap to never lose conversation
+                            # Remove everything except the last overlap for next chunk continuity
                             audio_buffer = audio_buffer[
                                 chunk_samples - overlap_samples :
                             ]
 
                         # Check if we got meaningful audio (not just silence)
-                        if np.max(np.abs(audio_chunk)) > 50:
+                        if np.max(np.abs(audio_chunk)) > MICROPHONE_ACTIVITY_THRESHOLD:
                             # Process chunk in completely separate thread - never blocks audio
                             processing_thread = threading.Thread(
                                 target=on_audio_chunk,
@@ -189,7 +213,7 @@ def capture_audio_with_callback(
         start_event: Threading event to synchronize start
         on_audio_captured: Callback function to call with captured audio
     """
-    duration = 20  # seconds
+    duration = DEFAULT_RECORDING_DURATION  # Use config default
     try:
         samplerate = int(sd.query_devices(device_index)["default_samplerate"])
 

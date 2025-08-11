@@ -7,6 +7,7 @@ I have successfully removed the confirmation dialogs that appeared when starting
 ### 🔧 **Removed Confirmations:**
 
 1. **Real-time Recording Confirmation:**
+
    ```python
    # BEFORE (with confirmation):
    if messagebox.askyesno("Confirm Recording", confirm_msg):
@@ -18,6 +19,7 @@ I have successfully removed the confirmation dialogs that appeared when starting
    ```
 
 2. **Regular Recording Confirmation:**
+
    ```python
    # BEFORE (with confirmation):
    if messagebox.askyesno("Confirm Recording", confirm_msg):
@@ -33,12 +35,14 @@ I have successfully removed the confirmation dialogs that appeared when starting
 ### 🎯 **Behavior Change:**
 
 **Before:**
+
 - Click "Start Recording" button
 - ❓ Confirmation dialog appears: "Start real-time recording from: • Device 1 • Device 2"
 - User must click "Yes" to proceed
 - Recording starts
 
 **After:**
+
 - Click "Start Recording" button
 - ✅ Recording starts immediately
 - No interruption or confirmation needed
@@ -55,6 +59,7 @@ I have successfully removed the confirmation dialogs that appeared when starting
 The recording can still be stopped at any time using the "Stop" button, so removing the confirmation doesn't affect safety or control.
 
 ### 📁 **Files Modified:**
+
 - `src/gui.py` - Removed confirmation dialogs from both recording functions
 
 The application will now start recording immediately when you click the "Start Recording" button, without any confirmation prompts!

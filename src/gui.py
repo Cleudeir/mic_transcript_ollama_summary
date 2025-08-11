@@ -10,13 +10,17 @@ from src.capture_audio import (
     capture_audio_with_callback,
     capture_audio_realtime,
 )
-import tkinter as tk
-from tkinter import messagebox
-from src.capture_audio import get_microphone_list, capture_audio_with_callback
-from tkinter import messagebox
-from src.capture_audio import get_microphone_list, capture_audio_with_callback
 from src.ollama_service import OllamaService
 from src.translations import get_translation_manager, set_global_language, t
+from src.config import (
+    CHUNK_DURATION,
+    OVERLAP_DURATION,
+    format_status_message,
+    format_overlap_message,
+    format_continuous_message,
+    format_worker_message,
+    format_recording_start_message,
+)
 
 
 class MicrophoneTranscriberGUI:
@@ -2874,9 +2878,7 @@ class MicrophoneTranscriberGUI:
         # Update UI state
         self.is_recording = True
         self.is_paused = False
-        self.status_var.set(
-            "Recording: 10s samples with 200ms overlap - no conversation lost"
-        )
+        self.status_var.set(format_status_message())
 
         # Update recording controls
         self.update_recording_controls_state()
@@ -2902,7 +2904,7 @@ class MicrophoneTranscriberGUI:
             # Add initial log message
             self.add_log_message(
                 device_index,
-                f"🔴 CONTINUOUS: 10s sampling + 200ms overlap from device {device_index} (never loses conversation)",
+                format_continuous_message(device_index),
                 selected,
             )
 
@@ -2924,9 +2926,7 @@ class MicrophoneTranscriberGUI:
 
         # Update UI
         self.update_recording_controls_state()
-        self.status_var.set(
-            "Recording stopped - 10s samples with 200ms overlap completed"
-        )
+        self.status_var.set(format_overlap_message())
 
         # Refresh files list if files tab exists
         if hasattr(self, "files_listbox"):
@@ -3055,7 +3055,7 @@ class MicrophoneTranscriberGUI:
                     # Add processing start log
                     self.add_log_message(
                         device_idx,
-                        f"Worker {worker_id}: Processing 10s sample with 200ms overlap (no loss)",
+                        format_worker_message(worker_id),
                         selected_indices,
                     )
 
@@ -3113,15 +3113,13 @@ class MicrophoneTranscriberGUI:
         # Add initial status
         self.add_log_message(
             device_index,
-            f"🎤 Starting continuous audio capture with 10s samples + 200ms overlap (no conversation loss)",
+            format_recording_start_message(),
             selected_indices,
         )
 
-        # Start real-time capture with 10-second chunks for better transcription quality
-        # 200ms overlap ensures no conversation is lost between chunks
-        capture_audio_realtime(
-            device_index, on_audio_chunk, stop_event, chunk_duration=10
-        )
+        # Start real-time capture with configured chunks for faster response
+        # Configured overlap ensures no conversation is lost between chunks
+        capture_audio_realtime(device_index, on_audio_chunk, stop_event)
 
         # Signal all transcription workers to shutdown
         for _ in range(num_workers):

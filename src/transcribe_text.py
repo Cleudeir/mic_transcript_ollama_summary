@@ -5,17 +5,28 @@ import time
 import queue
 import numpy as np
 import concurrent.futures
+from .config import (
+    SPEECH_RECOGNITION_ENERGY_THRESHOLD,
+    SPEECH_RECOGNITION_PAUSE_THRESHOLD,
+    SPEECH_RECOGNITION_PHRASE_THRESHOLD,
+    TRANSCRIPTION_OPERATION_TIMEOUT,
+    TRANSCRIPTION_ASYNC_TIMEOUT,
+    CHUNK_DURATION,
+    validate_speech_recognition_config,
+)
 
+# Validate configuration on import
+validate_speech_recognition_config()
 
 # Global recognizer instance to avoid recreation overhead
 _recognizer = sr.Recognizer()
-_recognizer.energy_threshold = 200  # Lower threshold for sensitivity
+_recognizer.energy_threshold = SPEECH_RECOGNITION_ENERGY_THRESHOLD
 _recognizer.dynamic_energy_threshold = True
-_recognizer.pause_threshold = 0.3  # Shorter pause threshold for real-time
-_recognizer.phrase_threshold = 0.2  # Shorter phrase threshold
+_recognizer.pause_threshold = SPEECH_RECOGNITION_PAUSE_THRESHOLD
+_recognizer.phrase_threshold = SPEECH_RECOGNITION_PHRASE_THRESHOLD
 
-# Set operation timeout for longer audio chunks (10 seconds + processing time)
-_recognizer.operation_timeout = 15  # 15 seconds total timeout for 10s chunks
+# Set operation timeout for configured audio chunks
+_recognizer.operation_timeout = TRANSCRIPTION_OPERATION_TIMEOUT
 
 
 def transcribe_audio(audio_data, samplerate, language="pt-BR"):
@@ -71,15 +82,15 @@ def transcribe_audio_realtime(audio_data, samplerate, language="pt-BR"):
         audio_bytes = audio_data.tobytes()
         audio_data_sr = sr.AudioData(audio_bytes, samplerate, 2)
 
-        # Perform transcription with extended timeout for 10-second chunks
+        # Perform transcription with extended timeout for 1-second chunks
         start_time = time.time()
-        # Use longer timeout for 10-second audio chunks
+        # Use shorter timeout for 1-second audio chunks
         text = _recognizer.recognize_google(audio_data_sr, language=language)
 
         # Log processing time for debugging
         processing_time = time.time() - start_time
-        if processing_time > 5.0:  # Log if transcription takes longer than 5 seconds
-            print(f"Slow transcription for 10s chunk: {processing_time:.2f}s")
+        if processing_time > 2.0:  # Log if transcription takes longer than 2 seconds
+            print(f"Slow transcription for 1s chunk: {processing_time:.2f}s")
 
         return text
     except sr.UnknownValueError:
@@ -104,7 +115,7 @@ def transcribe_audio_async(audio_data, samplerate, language="pt-BR"):
         return None
 
     def transcribe_worker():
-        """Fast transcription worker with extended timeout for 10s chunks"""
+        """Fast transcription worker with extended timeout for 1s chunks"""
         global _recognizer
 
         try:
@@ -112,8 +123,8 @@ def transcribe_audio_async(audio_data, samplerate, language="pt-BR"):
             audio_bytes = audio_data.tobytes()
             audio_data_sr = sr.AudioData(audio_bytes, samplerate, 2)
 
-            # Use longer timeout for 10-second audio chunks
-            _recognizer.operation_timeout = 15.0  # Extended timeout for 10s chunks
+            # Use shorter timeout for 1-second audio chunks
+            _recognizer.operation_timeout = 5.0  # Extended timeout for 1s chunks
 
             # Perform transcription with extended timeout
             text = _recognizer.recognize_google(audio_data_sr, language=language)
@@ -130,11 +141,11 @@ def transcribe_audio_async(audio_data, samplerate, language="pt-BR"):
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(transcribe_worker)
         try:
-            # Wait for result with extended timeout for 10-second chunks
-            result = future.result(timeout=20.0)  # 20 second max wait for 10s chunks
+            # Wait for result with configured timeout for audio chunks
+            result = future.result(timeout=TRANSCRIPTION_ASYNC_TIMEOUT)
             return result
         except concurrent.futures.TimeoutError:
-            return "Transcription timeout (20s limit for 10s chunk)"
+            return f"Transcription timeout ({TRANSCRIPTION_ASYNC_TIMEOUT}s limit for {CHUNK_DURATION}s chunk)"
         except Exception as e:
             return f"Async error: {e}"
 
