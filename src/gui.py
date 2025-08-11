@@ -66,23 +66,6 @@ class MicrophoneTranscriberGUI:
         )
         title_label.pack(pady=10)
 
-        # Control buttons frame (moved up for better layout)
-        button_frame = tk.Frame(self.root)
-        button_frame.pack(pady=10)
-
-        # Listen button
-        self.listen_btn = tk.Button(
-            button_frame,
-            text=t("start_button", "🎤 Start"),
-            command=self.toggle_recording,
-            font=("Arial", 12, "bold"),
-            bg="#4CAF50",
-            fg="white",
-            padx=20,
-            pady=5,
-        )
-        self.listen_btn.pack(side=tk.LEFT, padx=5)
-
         # Create notebook for tabbed interface
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
@@ -667,6 +650,10 @@ class MicrophoneTranscriberGUI:
         tk.Label(url_frame, text="Enter your Ollama server URL (e.g., http://localhost:11434)", 
                 font=("Arial", 8), fg="gray").pack(anchor=tk.W)
         
+        # URL status label (shows if loaded from config)
+        self.url_status_label = tk.Label(url_frame, text="", font=("Arial", 8), fg="green")
+        self.url_status_label.pack(anchor=tk.W)
+        
         self.ollama_url_var = tk.StringVar()
         self.ollama_url_entry = tk.Entry(
             url_frame, textvariable=self.ollama_url_var, width=50
@@ -678,15 +665,29 @@ class MicrophoneTranscriberGUI:
 
         self.ollama_url_var.trace("w", self.on_ollama_url_change)
 
+        # Button frame for URL actions
+        url_button_frame = tk.Frame(url_frame)
+        url_button_frame.pack(anchor=tk.W, pady=2)
+
         # Test connection button
         test_btn = tk.Button(
-            url_frame,
+            url_button_frame,
             text="🔗 Test Connection",
             command=self.test_ollama_connection,
             bg="#fff3e0",
             relief="groove",
         )
-        test_btn.pack(anchor=tk.W, pady=2)
+        test_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        # Reload from config button
+        reload_btn = tk.Button(
+            url_button_frame,
+            text="🔄 Reload from Config",
+            command=self.reload_config_values,
+            bg="#e8f5e8",
+            relief="groove",
+        )
+        reload_btn.pack(side=tk.LEFT)
 
         # Connection status
         self.connection_status_label = tk.Label(
@@ -762,9 +763,14 @@ class MicrophoneTranscriberGUI:
                     self.ollama_service.client = ollama.Client(host=current_url, timeout=30)
                 
                 self.ollama_url_var.set(current_url)
+                # Show status that URL was loaded from config
+                if hasattr(self, 'url_status_label'):
+                    self.url_status_label.config(text="✓ URL loaded from configuration", fg="green")
             else:
                 # Leave URL field empty if no config exists
                 self.ollama_url_var.set("")
+                if hasattr(self, 'url_status_label'):
+                    self.url_status_label.config(text="No URL configured", fg="orange")
 
             # Only populate model if it exists in config (don't use defaults)
             if "model_name" in ollama_config:
@@ -785,6 +791,11 @@ class MicrophoneTranscriberGUI:
 
         except Exception as e:
             self.status_var.set(f"Error loading config: {e}")
+
+    def reload_config_values(self):
+        """Reload configuration values from config file"""
+        self.load_config_tab_values()
+        self.status_var.set("Configuration reloaded from config file")
 
     def sync_ollama_service_with_config(self):
         """Ensure OllamaService is synchronized with the current configuration"""
