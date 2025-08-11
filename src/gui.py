@@ -98,6 +98,9 @@ class MicrophoneTranscriberGUI:
         # Initialize Ollama connection and load models on startup
         self.root.after(1000, self.initialize_ollama_on_startup)
 
+        # Ensure configuration is loaded in UI after everything is initialized
+        self.root.after(500, self.ensure_config_loaded_in_ui)
+
         # Auto-start recording after everything is initialized
         self.root.after(3000, self.auto_start_recording)
 
@@ -394,7 +397,7 @@ class MicrophoneTranscriberGUI:
 
         # Transcript files list section
         transcript_section = ttk.LabelFrame(
-            main_container, text="📄 Transcript Files", padding=10
+            main_container, text="📄    ", padding=10
         )
         transcript_section.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
 
@@ -682,16 +685,6 @@ class MicrophoneTranscriberGUI:
         )
         test_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        # Reload from config button
-        reload_btn = tk.Button(
-            url_button_frame,
-            text="🔄 Reload from Config",
-            command=self.reload_config_values,
-            bg="#e8f5e8",
-            relief="groove",
-        )
-        reload_btn.pack(side=tk.LEFT)
-
         # Connection status
         self.connection_status_label = tk.Label(
             url_frame, text="Status: Not tested", font=("Arial", 9), fg="gray"
@@ -795,10 +788,33 @@ class MicrophoneTranscriberGUI:
         except Exception as e:
             self.status_var.set(f"Error loading config: {e}")
 
-    def reload_config_values(self):
-        """Reload configuration values from config file"""
-        self.load_config_tab_values()
-        self.status_var.set("Configuration reloaded from config file")
+    def ensure_config_loaded_in_ui(self):
+        """Ensure configuration is properly loaded and displayed in UI"""
+        try:
+            # Force reload the configuration to ensure UI is updated
+            if hasattr(self, 'ollama_url_var') and hasattr(self, 'model_var'):
+                # Load config from file
+                config = {}
+                if os.path.exists(self.config_file):
+                    with open(self.config_file, "r") as f:
+                        config = json.load(f)
+                
+                ollama_config = config.get("ollama", {})
+                
+                # Explicitly set the URL in the UI
+                if "base_url" in ollama_config:
+                    url = ollama_config["base_url"]
+                    self.ollama_url_var.set(url)
+                    if hasattr(self, 'url_status_label'):
+                        self.url_status_label.config(text="✓ URL loaded from configuration", fg="green")
+                    self.status_var.set(f"Configuration loaded: {url}")
+                else:
+                    self.status_var.set("No URL found in configuration")
+                    
+                # Force UI update
+                self.root.update_idletasks()
+        except Exception as e:
+            self.status_var.set(f"Error ensuring config in UI: {e}")
 
     def sync_ollama_service_with_config(self):
         """Ensure OllamaService is synchronized with the current configuration"""
