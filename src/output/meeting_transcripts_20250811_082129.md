@@ -260,3 +260,9 @@
 
 **[08:23:51] Microphone 1:** as melhores família
 
+**[08:23:53] Microphone 2:** preciso para pensar
+
+**[08:23:54] Microphone 2:** passar na resposta a
+
+**[08:23:55] Microphone 1:** empresas de 4 trilhões de
+
