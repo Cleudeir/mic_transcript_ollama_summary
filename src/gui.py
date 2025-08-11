@@ -97,7 +97,8 @@ class MicrophoneTranscriberGUI:
         self.create_combined_tab()
         self.create_logs_tab()
         self.create_transcripts_tab()
-        self.create_files_tab()
+        self.create_transcript_files_tab()
+        self.create_ata_files_tab()
         self.create_mic_config_tab()
         self.create_ollama_config_tab()
 
@@ -416,83 +417,83 @@ class MicrophoneTranscriberGUI:
         self.mic2_transcript_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         mic2_transcript_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
-    def create_files_tab(self):
-        """Create the files management tab"""
-        files_frame = ttk.Frame(self.notebook)
-        self.notebook.add(files_frame, text="📁 Files")
+    def create_transcript_files_tab(self):
+        """Create the transcript files management tab"""
+        transcript_files_frame = ttk.Frame(self.notebook)
+        self.notebook.add(transcript_files_frame, text="� Transcript Files")
 
         # Main container
-        main_container = tk.Frame(files_frame)
+        main_container = tk.Frame(transcript_files_frame)
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        # Files list section
-        files_section = ttk.LabelFrame(
-            main_container, text="📄 Generated Files", padding=10
+        # Transcript files list section
+        transcript_section = ttk.LabelFrame(
+            main_container, text="📄 Transcript Files", padding=10
         )
-        files_section.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+        transcript_section.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
 
         # Files listbox with scrollbar
-        files_list_frame = tk.Frame(files_section)
-        files_list_frame.pack(fill=tk.BOTH, expand=True)
+        transcript_list_frame = tk.Frame(transcript_section)
+        transcript_list_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.files_listbox = tk.Listbox(files_list_frame, selectmode=tk.SINGLE)
-        files_scrollbar = tk.Scrollbar(
-            files_list_frame, orient=tk.VERTICAL, command=self.files_listbox.yview
+        self.transcript_files_listbox = tk.Listbox(transcript_list_frame, selectmode=tk.SINGLE)
+        transcript_scrollbar = tk.Scrollbar(
+            transcript_list_frame, orient=tk.VERTICAL, command=self.transcript_files_listbox.yview
         )
-        self.files_listbox.configure(yscrollcommand=files_scrollbar.set)
-        self.files_listbox.bind("<Double-Button-1>", self.open_selected_file)
+        self.transcript_files_listbox.configure(yscrollcommand=transcript_scrollbar.set)
+        self.transcript_files_listbox.bind("<Double-Button-1>", self.open_selected_transcript_file)
 
-        self.files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        files_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.transcript_files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        transcript_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Control buttons
-        buttons_frame = tk.Frame(files_section)
-        buttons_frame.pack(fill=tk.X, pady=(10, 0))
+        transcript_buttons_frame = tk.Frame(transcript_section)
+        transcript_buttons_frame.pack(fill=tk.X, pady=(10, 0))
 
-        refresh_btn = tk.Button(
-            buttons_frame,
+        refresh_transcript_btn = tk.Button(
+            transcript_buttons_frame,
             text="🔄 Refresh",
-            command=self.refresh_files_list,
+            command=self.refresh_transcript_files_list,
             bg="#e3f2fd",
             relief="groove",
         )
-        refresh_btn.pack(side=tk.LEFT, padx=(0, 5))
+        refresh_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        open_btn = tk.Button(
-            buttons_frame,
+        open_transcript_btn = tk.Button(
+            transcript_buttons_frame,
             text="📖 Open",
-            command=self.open_selected_file,
+            command=self.open_selected_transcript_file,
             bg="#e8f5e8",
             relief="groove",
         )
-        open_btn.pack(side=tk.LEFT, padx=(0, 5))
+        open_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        delete_btn = tk.Button(
-            buttons_frame,
+        delete_transcript_btn = tk.Button(
+            transcript_buttons_frame,
             text="🗑️ Delete",
-            command=self.delete_selected_file,
+            command=self.delete_selected_transcript_file,
             bg="#ffebee",
             relief="groove",
         )
-        delete_btn.pack(side=tk.LEFT, padx=(0, 5))
+        delete_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        open_folder_btn = tk.Button(
-            buttons_frame,
+        open_transcript_folder_btn = tk.Button(
+            transcript_buttons_frame,
             text="📁 Open Folder",
-            command=self.open_output_folder,
+            command=self.open_transcript_folder,
             bg="#fff3e0",
             relief="groove",
         )
-        open_folder_btn.pack(side=tk.RIGHT)
+        open_transcript_folder_btn.pack(side=tk.RIGHT)
 
         # Generate ATA section
-        ata_section = ttk.LabelFrame(
+        ata_generation_section = ttk.LabelFrame(
             main_container, text="🤖 Generate Meeting Minutes (ATA)", padding=10
         )
-        ata_section.pack(fill=tk.X, pady=(5, 0))
+        ata_generation_section.pack(fill=tk.X, pady=(5, 0))
 
         # ATA generation controls
-        ata_controls_frame = tk.Frame(ata_section)
+        ata_controls_frame = tk.Frame(ata_generation_section)
         ata_controls_frame.pack(fill=tk.X)
 
         tk.Label(
@@ -505,26 +506,26 @@ class MicrophoneTranscriberGUI:
         file_select_frame = tk.Frame(ata_controls_frame)
         file_select_frame.pack(fill=tk.X, pady=(0, 5))
 
-        self.selected_file_var = tk.StringVar()
-        self.selected_file_label = tk.Label(
+        self.selected_transcript_var = tk.StringVar()
+        self.selected_transcript_label = tk.Label(
             file_select_frame,
-            textvariable=self.selected_file_var,
+            textvariable=self.selected_transcript_var,
             bg="#f5f5f5",
             relief="sunken",
             anchor="w",
         )
-        self.selected_file_label.pack(
+        self.selected_transcript_label.pack(
             side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 5), pady=5
         )
 
-        select_file_btn = tk.Button(
+        select_transcript_btn = tk.Button(
             file_select_frame,
             text="📁 Select File",
             command=self.select_transcript_file,
             bg="#e3f2fd",
             relief="groove",
         )
-        select_file_btn.pack(side=tk.RIGHT)
+        select_transcript_btn.pack(side=tk.RIGHT)
 
         # Generate button
         generate_ata_btn = tk.Button(
@@ -539,16 +540,104 @@ class MicrophoneTranscriberGUI:
         generate_ata_btn.pack(pady=(10, 0))
 
         # ATA status
-        self.ata_status_label = tk.Label(
+        self.transcript_ata_status_label = tk.Label(
             ata_controls_frame,
             text="Select a transcript file to generate meeting minutes",
             font=("Arial", 9),
             fg="gray",
         )
-        self.ata_status_label.pack(pady=(5, 0))
+        self.transcript_ata_status_label.pack(pady=(5, 0))
 
-        # Initialize files list
-        self.refresh_files_list()
+        # Initialize transcript files list
+        self.refresh_transcript_files_list()
+
+    def create_ata_files_tab(self):
+        """Create the ATA summary files management tab"""
+        ata_files_frame = ttk.Frame(self.notebook)
+        self.notebook.add(ata_files_frame, text="📊 ATA Summary")
+
+        # Main container
+        main_container = tk.Frame(ata_files_frame)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        # ATA files list section
+        ata_section = ttk.LabelFrame(
+            main_container, text="📊 Meeting Minutes (ATA) Files", padding=10
+        )
+        ata_section.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+
+        # Files listbox with scrollbar
+        ata_list_frame = tk.Frame(ata_section)
+        ata_list_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.ata_files_listbox = tk.Listbox(ata_list_frame, selectmode=tk.SINGLE)
+        ata_scrollbar = tk.Scrollbar(
+            ata_list_frame, orient=tk.VERTICAL, command=self.ata_files_listbox.yview
+        )
+        self.ata_files_listbox.configure(yscrollcommand=ata_scrollbar.set)
+        self.ata_files_listbox.bind("<Double-Button-1>", self.open_selected_ata_file)
+
+        self.ata_files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        ata_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Control buttons
+        ata_buttons_frame = tk.Frame(ata_section)
+        ata_buttons_frame.pack(fill=tk.X, pady=(10, 0))
+
+        refresh_ata_btn = tk.Button(
+            ata_buttons_frame,
+            text="🔄 Refresh",
+            command=self.refresh_ata_files_list,
+            bg="#e3f2fd",
+            relief="groove",
+        )
+        refresh_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        open_ata_btn = tk.Button(
+            ata_buttons_frame,
+            text="📖 Open",
+            command=self.open_selected_ata_file,
+            bg="#e8f5e8",
+            relief="groove",
+        )
+        open_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        delete_ata_btn = tk.Button(
+            ata_buttons_frame,
+            text="🗑️ Delete",
+            command=self.delete_selected_ata_file,
+            bg="#ffebee",
+            relief="groove",
+        )
+        delete_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        open_ata_folder_btn = tk.Button(
+            ata_buttons_frame,
+            text="📁 Open Folder",
+            command=self.open_ata_folder,
+            bg="#fff3e0",
+            relief="groove",
+        )
+        open_ata_folder_btn.pack(side=tk.RIGHT)
+
+        # ATA file info section
+        ata_info_section = ttk.LabelFrame(
+            main_container, text="📄 File Information", padding=10
+        )
+        ata_info_section.pack(fill=tk.X, pady=(5, 0))
+
+        self.ata_info_label = tk.Label(
+            ata_info_section,
+            text="Select an ATA file to view information",
+            font=("Arial", 9),
+            fg="gray",
+            justify=tk.LEFT,
+            anchor="w"
+        )
+        self.ata_info_label.pack(fill=tk.X, pady=5)
+
+        # Initialize ATA files list
+        self.refresh_ata_files_list()
 
     def create_mic_config_tab(self):
         """Create the microphone configuration tab"""
@@ -1168,6 +1257,230 @@ class MicrophoneTranscriberGUI:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open output folder: {e}")
 
+    # Transcript Files Management Methods
+    def refresh_transcript_files_list(self):
+        """Refresh the list of transcript files"""
+        try:
+            self.transcript_files_listbox.delete(0, tk.END)
+
+            # Check transcript directory
+            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            if not os.path.exists(transcript_dir):
+                os.makedirs(transcript_dir)
+                return
+
+            # Get transcript files
+            files = []
+            for file in os.listdir(transcript_dir):
+                if file.endswith('.md'):
+                    file_path = os.path.join(transcript_dir, file)
+                    file_time = os.path.getmtime(file_path)
+                    files.append((file, file_time))
+
+            # Sort by modification time (newest first)
+            files.sort(key=lambda x: x[1], reverse=True)
+
+            # Add to listbox
+            for file, _ in files:
+                self.transcript_files_listbox.insert(tk.END, file)
+
+        except Exception as e:
+            self.status_var.set(f"Error refreshing transcript files: {e}")
+
+    def open_selected_transcript_file(self, event=None):
+        """Open the selected transcript file"""
+        try:
+            selection = self.transcript_files_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a transcript file to open")
+                return
+
+            filename = self.transcript_files_listbox.get(selection[0])
+            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            file_path = os.path.join(transcript_dir, filename)
+
+            if os.path.exists(file_path):
+                import subprocess
+                import sys
+
+                if sys.platform.startswith("win"):
+                    os.startfile(file_path)
+                elif sys.platform.startswith("darwin"):
+                    subprocess.call(["open", file_path])
+                else:
+                    subprocess.call(["xdg-open", file_path])
+
+                self.status_var.set(f"Opened: {filename}")
+            else:
+                messagebox.showerror("Error", f"File not found: {filename}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open transcript file: {e}")
+
+    def delete_selected_transcript_file(self):
+        """Delete the selected transcript file"""
+        try:
+            selection = self.transcript_files_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a transcript file to delete")
+                return
+
+            filename = self.transcript_files_listbox.get(selection[0])
+            
+            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete '{filename}'?"):
+                transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+                file_path = os.path.join(transcript_dir, filename)
+                
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    self.refresh_transcript_files_list()
+                    self.status_var.set(f"Deleted: {filename}")
+                else:
+                    messagebox.showerror("Error", f"File not found: {filename}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to delete transcript file: {e}")
+
+    def open_transcript_folder(self):
+        """Open the transcript folder in file explorer"""
+        try:
+            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            if not os.path.exists(transcript_dir):
+                os.makedirs(transcript_dir)
+
+            import subprocess
+            import sys
+
+            if sys.platform.startswith("win"):
+                os.startfile(transcript_dir)
+            elif sys.platform.startswith("darwin"):
+                subprocess.call(["open", transcript_dir])
+            else:
+                subprocess.call(["xdg-open", transcript_dir])
+
+            self.status_var.set("Transcript folder opened")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open transcript folder: {e}")
+
+    # ATA Files Management Methods
+    def refresh_ata_files_list(self):
+        """Refresh the list of ATA files"""
+        try:
+            self.ata_files_listbox.delete(0, tk.END)
+
+            # Check ATA directory
+            ata_dir = os.path.join(os.path.dirname(__file__), "output", "ata")
+            if not os.path.exists(ata_dir):
+                os.makedirs(ata_dir)
+                return
+
+            # Get ATA files
+            files = []
+            for file in os.listdir(ata_dir):
+                if file.endswith('.md'):
+                    file_path = os.path.join(ata_dir, file)
+                    file_time = os.path.getmtime(file_path)
+                    files.append((file, file_time))
+
+            # Sort by modification time (newest first)
+            files.sort(key=lambda x: x[1], reverse=True)
+
+            # Add to listbox
+            for file, _ in files:
+                self.ata_files_listbox.insert(tk.END, file)
+
+            # Update info label
+            if files:
+                self.ata_info_label.config(
+                    text=f"Found {len(files)} ATA summary file(s). Double-click to open.",
+                    fg="blue"
+                )
+            else:
+                self.ata_info_label.config(
+                    text="No ATA summary files found. Generate meeting minutes from transcript files.",
+                    fg="gray"
+                )
+
+        except Exception as e:
+            self.status_var.set(f"Error refreshing ATA files: {e}")
+
+    def open_selected_ata_file(self, event=None):
+        """Open the selected ATA file"""
+        try:
+            selection = self.ata_files_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select an ATA file to open")
+                return
+
+            filename = self.ata_files_listbox.get(selection[0])
+            ata_dir = os.path.join(os.path.dirname(__file__), "output", "ata")
+            file_path = os.path.join(ata_dir, filename)
+
+            if os.path.exists(file_path):
+                import subprocess
+                import sys
+
+                if sys.platform.startswith("win"):
+                    os.startfile(file_path)
+                elif sys.platform.startswith("darwin"):
+                    subprocess.call(["open", file_path])
+                else:
+                    subprocess.call(["xdg-open", file_path])
+
+                self.status_var.set(f"Opened: {filename}")
+            else:
+                messagebox.showerror("Error", f"File not found: {filename}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open ATA file: {e}")
+
+    def delete_selected_ata_file(self):
+        """Delete the selected ATA file"""
+        try:
+            selection = self.ata_files_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select an ATA file to delete")
+                return
+
+            filename = self.ata_files_listbox.get(selection[0])
+            
+            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete '{filename}'?"):
+                ata_dir = os.path.join(os.path.dirname(__file__), "output", "ata")
+                file_path = os.path.join(ata_dir, filename)
+                
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    self.refresh_ata_files_list()
+                    self.status_var.set(f"Deleted: {filename}")
+                else:
+                    messagebox.showerror("Error", f"File not found: {filename}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to delete ATA file: {e}")
+
+    def open_ata_folder(self):
+        """Open the ATA folder in file explorer"""
+        try:
+            ata_dir = os.path.join(os.path.dirname(__file__), "output", "ata")
+            if not os.path.exists(ata_dir):
+                os.makedirs(ata_dir)
+
+            import subprocess
+            import sys
+
+            if sys.platform.startswith("win"):
+                os.startfile(ata_dir)
+            elif sys.platform.startswith("darwin"):
+                subprocess.call(["open", ata_dir])
+            else:
+                subprocess.call(["xdg-open", ata_dir])
+
+            self.status_var.set("ATA folder opened")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open ATA folder: {e}")
+
     def select_transcript_file(self):
         """Select a transcript file for ATA generation"""
         try:
@@ -1190,9 +1503,9 @@ class MicrophoneTranscriberGUI:
             )
 
             if file_path:
-                self.selected_file_var.set(os.path.basename(file_path))
+                self.selected_transcript_var.set(os.path.basename(file_path))
                 self.selected_transcript_path = file_path
-                self.ata_status_label.config(
+                self.transcript_ata_status_label.config(
                     text="File selected. Click Generate to create ATA.", fg="blue"
                 )
 
@@ -1215,7 +1528,7 @@ class MicrophoneTranscriberGUI:
                 messagebox.showerror("Error", "Selected file no longer exists")
                 return
 
-            self.ata_status_label.config(
+            self.transcript_ata_status_label.config(
                 text="Generating meeting minutes...", fg="orange"
             )
             self.root.update_idletasks()
@@ -1243,10 +1556,10 @@ class MicrophoneTranscriberGUI:
             )
 
             if result.get("success"):
-                self.ata_status_label.config(
+                self.transcript_ata_status_label.config(
                     text=f"✅ ATA generated: {output_name}", fg="green"
                 )
-                self.refresh_files_list()
+                self.refresh_ata_files_list()
 
                 # Ask if user wants to open the generated file
                 if messagebox.askyesno(
@@ -1256,7 +1569,7 @@ class MicrophoneTranscriberGUI:
                     self.open_file(output_path)
             else:
                 error_msg = result.get("error", "Unknown error")
-                self.ata_status_label.config(
+                self.transcript_ata_status_label.config(
                     text=f"❌ Generation failed: {error_msg[:50]}...", fg="red"
                 )
                 messagebox.showerror(
@@ -1264,7 +1577,7 @@ class MicrophoneTranscriberGUI:
                 )
 
         except Exception as e:
-            self.ata_status_label.config(text=f"❌ Error: {str(e)[:50]}...", fg="red")
+            self.transcript_ata_status_label.config(text=f"❌ Error: {str(e)[:50]}...", fg="red")
             messagebox.showerror("Error", f"Failed to generate ATA: {e}")
 
     def open_file(self, file_path):
