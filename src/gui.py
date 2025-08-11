@@ -66,18 +66,22 @@ class MicrophoneTranscriberGUI:
         # Instructions
         instruction_label = tk.Label(
             self.root,
-            text="Select exactly two microphones for simultaneous recording:",
-            font=("Arial", 10),
+            text="Available Microphones - Select exactly two for simultaneous recording:",
+            font=("Arial", 11, "bold"),
+            fg="blue",
         )
         instruction_label.pack(pady=5)
 
         # Status bar (create early so it's available for load_microphones)
         self.status_var = tk.StringVar()
-        self.status_var.set("Ready")
+        self.status_var.set("Loading microphones...")
 
         # Microphone selection frame
         self.mic_frame = tk.Frame(self.root)
         self.mic_frame.pack(pady=10, padx=20, fill=tk.X)
+
+        # Load and display microphones immediately
+        self.load_microphones()
 
         # Load and display microphones
         self.load_microphones()
@@ -99,32 +103,6 @@ class MicrophoneTranscriberGUI:
         )
         self.listen_btn.pack(side=tk.LEFT, padx=5)
 
-        # Clear button
-        clear_btn = tk.Button(
-            button_frame,
-            text="🗑️ Clear All",
-            command=self.clear_all_output,
-            font=("Arial", 10),
-            bg="#f44336",
-            fg="white",
-            padx=15,
-            pady=5,
-        )
-        clear_btn.pack(side=tk.LEFT, padx=5)
-
-        # Save button
-        save_btn = tk.Button(
-            button_frame,
-            text="💾 Save Transcripts",
-            command=self.save_transcripts,
-            font=("Arial", 10),
-            bg="#9C27B0",
-            fg="white",
-            padx=15,
-            pady=5,
-        )
-        save_btn.pack(side=tk.LEFT, padx=5)
-
         # Auto-save status label
         self.auto_save_label = tk.Label(
             button_frame,
@@ -133,32 +111,6 @@ class MicrophoneTranscriberGUI:
             fg="gray",
         )
         self.auto_save_label.pack(side=tk.LEFT, padx=5)
-
-        # Refresh microphones button
-        refresh_btn = tk.Button(
-            button_frame,
-            text="� Refresh Mics",
-            command=self.refresh_microphones,
-            font=("Arial", 10),
-            bg="#2196F3",
-            fg="white",
-            padx=15,
-            pady=5,
-        )
-        refresh_btn.pack(side=tk.LEFT, padx=5)
-
-        # Save preferences button
-        save_btn = tk.Button(
-            button_frame,
-            text="� Save Mic Choice",
-            command=self.save_mic_preferences,
-            font=("Arial", 10),
-            bg="#FF9800",
-            fg="white",
-            padx=15,
-            pady=5,
-        )
-        save_btn.pack(side=tk.LEFT, padx=5)
 
         # Create notebook for tabbed interface
         self.notebook = ttk.Notebook(self.root)

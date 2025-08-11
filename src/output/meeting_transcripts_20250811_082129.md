@@ -266,3 +266,101 @@
 
 **[08:23:55] Microphone 1:** empresas de 4 trilhões de
 
+**[08:23:56] Microphone 1:** pin
+
+**[08:23:56] Microphone 2:** Isso é uma
+
+**[08:23:57] Microphone 1:** declara
+
+**[08:23:57] Microphone 2:** coisa muito complexa
+
+**[08:23:59] Microphone 2:** ele aloca mais
+
+**[08:23:59] Microphone 1:** a ponte da
+
+**[08:24:02] Microphone 2:** né mas tempo de processamento
+
+**[08:24:03] Microphone 2:** para dar uma resposta
+
+**[08:24:05] Microphone 1:** nessa semana
+
+**[08:24:05] Microphone 2:** se é uma coisa
+
+**[08:24:06] Microphone 2:** Qual é a capital da França ele
+
+**[08:24:08] Microphone 2:** ele já resolve
+
+**[08:24:08] Microphone 1:** empresa estaria raspando
+
+**[08:24:09] Microphone 2:** diretamente né
+
+**[08:24:09] Microphone 1:** conteúdo de site de forma
+
+**[08:24:11] Microphone 2:** praticamente zero
+
+**[08:24:12] Microphone 2:** 0,001
+
+**[08:24:12] Microphone 1:** orientações de bloqueio estabelecida
+
+**[08:24:14] Microphone 2:** de tempo de computo porque
+
+**[08:24:16] Microphone 2:** porque isso aqui já tá nos dados
+
+**[08:24:17] Microphone 2:** resultados dele é super tranquilo não precisa fazer
+
+**[08:24:19] Microphone 2:** fazendo nenhuma busca nenhum processamento
+
+**[08:24:20] Microphone 2:** para chegar então é
+
+**[08:24:21] Microphone 2:** é decidido de forma dinâmica
+
+**[08:24:22] Microphone 1:** espalha em obedecer
+
+**[08:24:23] Microphone 2:** é o tempo que ele vai alocar
+
+**[08:24:23] Microphone 1:** o que está determinado no arqu
+
+**[08:24:24] Microphone 2:** para esse reasons
+
+**[08:24:27] Microphone 1:** muito tempo
+
+**[08:24:27] Microphone 2:** eles estão se adaptando
+
+**[08:24:29] Microphone 1:** e ele chega
+
+**[08:24:29] Microphone 2:** quando essa tendência de do mercado
+
+**[08:24:30] Microphone 1:** mudar o seu próprio u
+
+**[08:24:31] Microphone 2:** resultado de ser um modelo híbrido
+
+**[08:24:32] Microphone 2:** que é uma coisa que o A3 por exemplo
+
+**[08:24:33] Microphone 2:** hoje em dia não é e
+
+**[08:24:33] Microphone 1:** passar despercebido
+
+**[08:24:35] Microphone 1:** declarou
+
+**[08:24:35] Microphone 2:** que isso de couro internas
+
+**[08:24:36] Microphone 1:** essa atividade foi
+
+**[08:24:36] Microphone 2:** tu usa uma coisa que ele já tem na
+
+**[08:24:38] Microphone 1:** foi observada em dezenas
+
+**[08:24:38] Microphone 2:** na verdade né que o
+
+**[08:24:39] Microphone 1:** milhares de domínios e milhões
+
+**[08:24:40] Microphone 2:** três tem o 4 o já tem
+
+**[08:24:41] Microphone 1:** solicitações por dia
+
+**[08:24:41] Microphone 2:** putz é um problema de
+
+**[08:24:42] Microphone 1:** conseguimos identificar
+
+**[08:24:42] Microphone 2:** código é um problema de
+
