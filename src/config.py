@@ -4,8 +4,8 @@ Centralized configuration to manage all timing and audio parameters.
 """
 
 # Audio Capture Settings
-CHUNK_DURATION = 30  # Duration in seconds for each audio chunk
-OVERLAP_DURATION = 0.1  # Overlap duration in seconds (50ms)
+CHUNK_DURATION = 10  # Duration in seconds for each audio chunk
+OVERLAP_DURATION = CHUNK_DURATION * 0.3  # Overlap duration in seconds
 SILENCE_THRESHOLD = 50  # Minimum amplitude to consider as meaningful audio
 
 # Audio Quality Settings
@@ -19,11 +19,9 @@ SPEECH_RECOGNITION_PAUSE_THRESHOLD = 0.3  # Shorter pause threshold for real-tim
 SPEECH_RECOGNITION_PHRASE_THRESHOLD = 0.2  # Shorter phrase threshold
 
 # Transcription Timeout Settings
-TRANSCRIPTION_TIMEOUT = 5  # Operation timeout for transcription (seconds)
-ASYNC_TIMEOUT = 8  # Async future timeout (seconds)
-SLOW_TRANSCRIPTION_THRESHOLD = (
-    2  # Log if transcription takes longer than this (seconds)
-)
+TRANSCRIPTION_TIMEOUT = CHUNK_DURATION  # Operation timeout for transcription (seconds)
+ASYNC_TIMEOUT = CHUNK_DURATION * 1.1  # Async future timeout (seconds)
+SLOW_TRANSCRIPTION_THRESHOLD = 2
 
 # Aliases for consistent naming convention
 TRANSCRIPTION_OPERATION_TIMEOUT = TRANSCRIPTION_TIMEOUT  # Alias for consistent naming
