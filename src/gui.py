@@ -71,7 +71,7 @@ class MicrophoneTranscriberGUI:
     def setup_gui(self):
         """Setup all GUI components"""
         # Create menu bar
-        self.setup_menu_bar()
+        # self.setup_menu_bar()
 
         # Title
         title_label = tk.Label(
@@ -79,25 +79,10 @@ class MicrophoneTranscriberGUI:
         )
         title_label.pack(pady=10)
 
-        # Instructions
-        instruction_label = tk.Label(
-            self.root,
-            text="Available Microphones - Select exactly two for simultaneous recording:",
-            font=("Arial", 11, "bold"),
-            fg="blue",
-        )
-        instruction_label.pack(pady=5)
-
-        # Status bar (create early so it's available for load_microphones)
+        # Status bar variable (must be initialized before usage)
         self.status_var = tk.StringVar()
-        self.status_var.set("Loading microphones...")
-
-        # Microphone selection frame
-        self.mic_frame = tk.Frame(self.root)
-        self.mic_frame.pack(pady=10, padx=20, fill=tk.X)
-
-        # Load and display microphones immediately
-        self.load_microphones()
+        self.status_var.set("")
+        # ...existing code...
 
         # Control buttons frame (moved up for better layout)
         button_frame = tk.Frame(self.root)
@@ -163,20 +148,7 @@ class MicrophoneTranscriberGUI:
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
-        # Microphone menu
-        mic_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="🎤 Microphones", menu=mic_menu)
-
-        mic_menu.add_command(
-            label="⚙️ Configure Microphones", command=self.open_mic_config_dialog
-        )
-        mic_menu.add_command(
-            label="📁 Load Saved Selection", command=self.load_mic_preferences
-        )
-        mic_menu.add_separator()
-        mic_menu.add_command(
-            label="🧪 Test Microphones", command=self.test_all_microphones
-        )
+        # ...existing code...
 
         # Settings menu
         settings_menu = tk.Menu(menubar, tearoff=0)
@@ -933,7 +905,7 @@ class MicrophoneTranscriberGUI:
             output_dir = os.path.join(os.path.dirname(__file__), "output")
             transcript_dir = os.path.join(output_dir, "transcript")
             ata_dir = os.path.join(output_dir, "ata")
-            
+
             # Create directories if they don't exist
             if not os.path.exists(transcript_dir):
                 os.makedirs(transcript_dir)
@@ -942,7 +914,7 @@ class MicrophoneTranscriberGUI:
 
             # Get files from both directories
             files = []
-            
+
             # Scan transcript directory
             if os.path.exists(transcript_dir):
                 for file_name in os.listdir(transcript_dir):
@@ -950,15 +922,17 @@ class MicrophoneTranscriberGUI:
                     if os.path.isfile(file_path) and file_name.endswith(".md"):
                         stat = os.stat(file_path)
                         modified_time = datetime.datetime.fromtimestamp(stat.st_mtime)
-                        files.append({
-                            "name": file_name,
-                            "path": file_path,
-                            "type": "📄 Transcript",
-                            "folder": "transcript/",
-                            "modified": modified_time,
-                            "size": stat.st_size,
-                        })
-            
+                        files.append(
+                            {
+                                "name": file_name,
+                                "path": file_path,
+                                "type": "📄 Transcript",
+                                "folder": "transcript/",
+                                "modified": modified_time,
+                                "size": stat.st_size,
+                            }
+                        )
+
             # Scan ATA directory
             if os.path.exists(ata_dir):
                 for file_name in os.listdir(ata_dir):
@@ -966,14 +940,16 @@ class MicrophoneTranscriberGUI:
                     if os.path.isfile(file_path) and file_name.endswith(".md"):
                         stat = os.stat(file_path)
                         modified_time = datetime.datetime.fromtimestamp(stat.st_mtime)
-                        files.append({
-                            "name": file_name,
-                            "path": file_path,
-                            "type": "🤖 ATA",
-                            "folder": "ata/",
-                            "modified": modified_time,
-                            "size": stat.st_size,
-                        })
+                        files.append(
+                            {
+                                "name": file_name,
+                                "path": file_path,
+                                "type": "🤖 ATA",
+                                "folder": "ata/",
+                                "modified": modified_time,
+                                "size": stat.st_size,
+                            }
+                        )
 
             # Also scan main output directory for legacy files
             for file_name in os.listdir(output_dir):
@@ -982,21 +958,23 @@ class MicrophoneTranscriberGUI:
                     # Get file stats
                     stat = os.stat(file_path)
                     modified_time = datetime.datetime.fromtimestamp(stat.st_mtime)
-                    
+
                     # Determine file type
                     if file_name.endswith("_ata.md"):
                         file_type = "🤖 ATA (Legacy)"
                     else:
                         file_type = "� Transcript (Legacy)"
 
-                    files.append({
-                        "name": file_name,
-                        "path": file_path,
-                        "type": file_type,
-                        "folder": "",
-                        "modified": modified_time,
-                        "size": stat.st_size,
-                    })
+                    files.append(
+                        {
+                            "name": file_name,
+                            "path": file_path,
+                            "type": file_type,
+                            "folder": "",
+                            "modified": modified_time,
+                            "size": stat.st_size,
+                        }
+                    )
 
             # Sort by modification time (newest first)
             files.sort(key=lambda x: x["modified"], reverse=True)
@@ -1129,11 +1107,13 @@ class MicrophoneTranscriberGUI:
         """Select a transcript file for ATA generation"""
         try:
             # Start in the transcript directory
-            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            transcript_dir = os.path.join(
+                os.path.dirname(__file__), "output", "transcript"
+            )
             if not os.path.exists(transcript_dir):
                 # Fallback to main output directory
                 transcript_dir = os.path.join(os.path.dirname(__file__), "output")
-            
+
             file_path = filedialog.askopenfilename(
                 title="Select Transcript File",
                 filetypes=[
@@ -1181,13 +1161,13 @@ class MicrophoneTranscriberGUI:
             )[0]
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             output_name = f"{base_name}_ata_{timestamp}.md"
-            
+
             # Create ATA directory if it doesn't exist
             output_dir = os.path.join(os.path.dirname(__file__), "output")
             ata_dir = os.path.join(output_dir, "ata")
             if not os.path.exists(ata_dir):
                 os.makedirs(ata_dir)
-            
+
             output_path = os.path.join(ata_dir, output_name)
 
             # Generate ATA using Ollama service
