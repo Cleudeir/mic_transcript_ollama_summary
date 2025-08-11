@@ -31,6 +31,12 @@ class MicrophoneTranscriberGUI:
         # Initialize configuration early
         self.config_file = "mic_config.json"
         
+        # Initialize other attributes that might be accessed early
+        self.auto_generate_ata = True
+        self.ollama_available = False
+        self.markdown_file = None
+        self.markdown_file_path = None
+        
         # Recording state
         self.is_recording = False
         # Microphone variables for selection
@@ -584,38 +590,9 @@ class MicrophoneTranscriberGUI:
         )
         refresh_mic_btn.pack(anchor=tk.W, pady=5)
 
-        # Advanced Configuration Section (for the detailed config)
-        advanced_section = ttk.LabelFrame(
-            scrollable_frame, text="🔧 Advanced Configuration", padding=10
-        )
-        advanced_section.pack(fill=tk.X, padx=10, pady=5)
-
-        tk.Label(
-            advanced_section,
-            text="Advanced microphone configuration options:",
-            font=("Arial", 10, "bold"),
-        ).pack(anchor=tk.W, pady=(0, 5))
-
-        # Container for advanced microphone checkboxes
-        self.config_mic_frame = tk.Frame(advanced_section)
-        self.config_mic_frame.pack(fill=tk.X, pady=5)
-
-        # Refresh advanced config button
-        refresh_advanced_btn = tk.Button(
-            advanced_section,
-            text="🔄 Refresh Advanced Config",
-            command=self.refresh_config_microphones,
-            bg="#e3f2fd",
-            relief="groove",
-        )
-        refresh_advanced_btn.pack(anchor=tk.W, pady=5)
-
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-
-        # Load current configuration
-        self.refresh_config_microphones()
 
         # Load microphones for main interface (now in tab)
         self.load_microphones()
@@ -738,75 +715,7 @@ class MicrophoneTranscriberGUI:
         except Exception as e:
             self.status_var.set(f"Error loading config: {e}")
 
-    def refresh_config_microphones(self):
-        """Refresh the microphone list in the config tab"""
-        try:
-            # Clear existing checkboxes
-            for widget in self.config_mic_frame.winfo_children():
-                widget.destroy()
-
-            # Show status while loading microphones
-            self.status_var.set("Loading microphones, please wait...")
-            # Get current microphones
-            mics = get_microphone_list()
-            self.config_mic_vars = []
-            self.status_var.set("")
-
-            # Load current selection
-            current_selection = []
-            try:
-                with open(self.config_file, "r") as f:
-                    config = json.load(f)
-                    current_selection = [
-                        mic["index"] for mic in config.get("saved_microphones", [])
-                    ]
-            except:
-                pass
-
-            # Create checkboxes for each microphone
-            for mic_idx, mic_name in mics:
-                var = tk.IntVar()
-                if mic_idx in current_selection:
-                    var.set(1)
-
-                checkbox = tk.Checkbutton(
-                    self.config_mic_frame,
-                    text=f"{mic_idx}: {mic_name}",
-                    variable=var,
-                    command=self.on_microphone_selection_change,
-                    wraplength=400,
-                )
-                checkbox.pack(anchor=tk.W, pady=1)
-                self.config_mic_vars.append((mic_idx, var, mic_name))
-
-        except Exception as e:
-            self.status_var.set(f"Error refreshing microphones: {e}")
-
     def on_microphone_selection_change(self):
-        """Handle microphone selection changes"""
-        try:
-            selected = [
-                (index, name) for index, var, name in self.config_mic_vars if var.get()
-            ]
-
-            # Limit to 2 selections
-            if len(selected) > 2:
-                # Uncheck the last selected (allow only 2)
-                for index, var, name in self.config_mic_vars:
-                    if var.get() and (index, name) not in selected[:2]:
-                        var.set(0)
-                selected = selected[:2]
-
-            # Save microphone configuration
-            self.save_microphone_config(selected)
-
-            # Update main interface
-            self.load_microphones()
-
-        except Exception as e:
-            self.status_var.set(f"Error updating microphone selection: {e}")
-
-    def on_main_microphone_selection_change(self):
         """Handle microphone selection changes in the main interface"""
         try:
             selected_indices = [idx for var, idx in self.mic_vars if var.get()]
@@ -1751,7 +1660,7 @@ class MicrophoneTranscriberGUI:
                     variable=var,
                     font=("Arial", 9),
                     anchor=tk.W,
-                    command=self.on_main_microphone_selection_change,
+                    command=self.on_microphone_selection_change,
                 )
                 cb.pack(anchor="w", pady=2)
                 self.mic_vars.append((var, idx))
