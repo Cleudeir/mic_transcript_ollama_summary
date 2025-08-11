@@ -83,9 +83,6 @@ class MicrophoneTranscriberGUI:
         # Load and display microphones immediately
         self.load_microphones()
 
-        # Load and display microphones
-        self.load_microphones()
-
         # Control buttons frame (moved up for better layout)
         button_frame = tk.Frame(self.root)
         button_frame.pack(pady=10)
@@ -144,14 +141,7 @@ class MicrophoneTranscriberGUI:
         menubar.add_cascade(label="🎤 Microphones", menu=mic_menu)
 
         mic_menu.add_command(
-            label="🔍 Scan for Microphones", command=self.refresh_microphones
-        )
-        mic_menu.add_command(
             label="⚙️ Configure Microphones", command=self.open_mic_config_dialog
-        )
-        mic_menu.add_separator()
-        mic_menu.add_command(
-            label="💾 Save Current Selection", command=self.save_mic_preferences
         )
         mic_menu.add_command(
             label="📁 Load Saved Selection", command=self.load_mic_preferences
@@ -181,10 +171,7 @@ class MicrophoneTranscriberGUI:
         menubar.add_cascade(label="📁 File", menu=file_menu)
 
         file_menu.add_command(
-            label="💾 Save Transcripts", command=self.save_transcripts
-        )
-        file_menu.add_command(
-            label="📂 Open Transcript Folder", command=self.open_transcript_folder
+            label=" Open Transcript Folder", command=self.open_transcript_folder
         )
         file_menu.add_separator()
         file_menu.add_command(
@@ -482,11 +469,11 @@ class MicrophoneTranscriberGUI:
         """Save transcripts to a markdown file with proper formatting"""
         with open(file_path, "w", encoding="utf-8") as f:
             # Write header
-            f.write(f"# Meeting Transcripts\n\n")
+            f.write(f"# Meeting Transcripts\n")
             f.write(
-                f"**Date:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                f"**Date:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
             )
-            f.write("---\n\n")
+            f.write("---\n")
 
             # Get content from both microphones
             mic1_content = self.mic1_transcript_text.get(1.0, tk.END).strip()
@@ -494,7 +481,7 @@ class MicrophoneTranscriberGUI:
 
             # Create combined transcript in chronological order
             if mic1_content or mic2_content:
-                f.write("## Combined Transcript\n\n")
+                f.write("## Combined Transcript\n")
 
                 # Parse timestamps and combine both microphone transcripts
                 combined_transcripts = []
@@ -536,21 +523,21 @@ class MicrophoneTranscriberGUI:
                 for timestamp, mic_name, text in combined_transcripts:
                     f.write(f"**[{timestamp}] {mic_name}:** {text}\n")
 
-                f.write("---\n\n")
+                f.write("---\n")
 
             # Write individual microphone sections
             if mic1_content:
-                f.write("## Microphone 1 Transcripts\n\n")
+                f.write("## Microphone 1 Transcripts\n")
                 for line in mic1_content.split("\n"):
                     if line.strip():
-                        f.write(f"{line}\n\n")
-                f.write("---\n\n")
+                        f.write(f"{line}\n")
+                f.write("---\n")
 
             if mic2_content:
-                f.write("## Microphone 2 Transcripts\n\n")
+                f.write("## Microphone 2 Transcripts\n")
                 for line in mic2_content.split("\n"):
                     if line.strip():
-                        f.write(f"{line}\n\n")
+                        f.write(f"{line}\n")
 
     def start_realtime_markdown_save(self):
         """Initialize real-time markdown file for auto-saving"""
@@ -567,13 +554,13 @@ class MicrophoneTranscriberGUI:
             self.markdown_file = open(self.markdown_file_path, "w", encoding="utf-8")
 
             # Write header
-            self.markdown_file.write(f"# Meeting Transcripts - Live Session\n\n")
+            self.markdown_file.write(f"# Meeting Transcripts - Live Session\n")
             self.markdown_file.write(
-                f"**Session Started:** {self.session_start_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                f"**Session Started:** {self.session_start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
             )
-            self.markdown_file.write("**Participants:** Microphone 1, Microphone 2\n\n")
-            self.markdown_file.write("---\n\n")
-            self.markdown_file.write("## Live Transcript\n\n")
+            self.markdown_file.write("**Participants:** Microphone 1, Microphone 2\n")
+            self.markdown_file.write("---\n")
+            self.markdown_file.write("## Live Transcript\n")
             self.markdown_file.flush()
 
             # Update UI
@@ -599,13 +586,13 @@ class MicrophoneTranscriberGUI:
                     else "Unknown"
                 )
 
-                self.markdown_file.write("\n---\n\n")
+                self.markdown_file.write("\n---\n")
                 self.markdown_file.write(
-                    f"**Session Ended:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    f"**Session Ended:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 )
                 if isinstance(duration, datetime.timedelta):
                     self.markdown_file.write(
-                        f"**Duration:** {str(duration).split('.')[0]}\n\n"
+                        f"**Duration:** {str(duration).split('.')[0]}\n"
                     )
 
                 self.markdown_file.close()
@@ -633,7 +620,7 @@ class MicrophoneTranscriberGUI:
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
 
             # Write to markdown file
-            self.markdown_file.write(f"**[{timestamp}] {mic_name}:** {transcript}\n\n")
+            self.markdown_file.write(f"**[{timestamp}] {mic_name}:** {transcript}\n")
             self.markdown_file.flush()  # Ensure immediate write to disk
 
         except Exception as e:
@@ -752,7 +739,7 @@ class MicrophoneTranscriberGUI:
         import datetime
 
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        transcript_message = f"[{timestamp}] {transcript}\n\n"
+        transcript_message = f"[{timestamp}] {transcript}\n"
 
         # Add to combined view
         widgets["combined"].insert(
@@ -894,7 +881,7 @@ class MicrophoneTranscriberGUI:
         if len(selected) != 2:
             messagebox.showerror(
                 "Selection Error",
-                "Please select exactly two microphones.\n\n"
+                "Please select exactly two microphones.\n"
                 f"You have selected {len(selected)} microphone(s).",
             )
             return
@@ -904,7 +891,7 @@ class MicrophoneTranscriberGUI:
         confirm_msg = (
             f"Start real-time recording from:\n"
             f"• {device_names[0]}\n"
-            f"• {device_names[1]}\n\n"
+            f"• {device_names[1]}\n"
             f"Recording will continue until you stop it."
         )
 
@@ -959,7 +946,7 @@ class MicrophoneTranscriberGUI:
         self.status_var.set("Continuous recording stopped")
 
         # Add log message
-        self.combined_output.insert(tk.END, "\n=== RECORDING STOPPED ===\n\n")
+        self.combined_output.insert(tk.END, "\n=== RECORDING STOPPED ===\n")
         self.combined_output.see(tk.END)
 
     def realtime_record_and_transcribe(
@@ -1148,7 +1135,7 @@ class MicrophoneTranscriberGUI:
         if len(selected) != 2:
             messagebox.showerror(
                 "Selection Error",
-                "Please select exactly two microphones.\n\n"
+                "Please select exactly two microphones.\n"
                 f"You have selected {len(selected)} microphone(s).",
             )
             return
@@ -1158,7 +1145,7 @@ class MicrophoneTranscriberGUI:
         confirm_msg = (
             f"Start recording from:\n"
             f"• {device_names[0]}\n"
-            f"• {device_names[1]}\n\n"
+            f"• {device_names[1]}\n"
             f"Recording will last 20 seconds."
         )
 
@@ -1330,7 +1317,7 @@ class MicrophoneTranscriberGUI:
         ).pack(pady=10)
 
         # Perform tests
-        results_text.insert(tk.END, "Starting microphone tests...\n\n")
+        results_text.insert(tk.END, "Starting microphone tests...\n")
         results_text.update()
 
         for device_id in selected:
@@ -1494,7 +1481,7 @@ class MicrophoneTranscriberGUI:
                     tk.END, "Starting comprehensive microphone tests...\n"
                 )
                 results_text.insert(
-                    tk.END, f"Found {len(self.mics)} microphone(s) to test\n\n"
+                    tk.END, f"Found {len(self.mics)} microphone(s) to test\n"
                 )
                 results_text.update()
 
@@ -1616,7 +1603,7 @@ class MicrophoneTranscriberGUI:
                     results_text.update()
 
                 progress_var.set("Testing completed!")
-                results_text.insert(tk.END, "🎉 All microphone tests completed!\n\n")
+                results_text.insert(tk.END, "🎉 All microphone tests completed!\n")
                 results_text.insert(
                     tk.END,
                     "Recommendation: Choose microphones marked as 'SUITABLE' with 'GOOD' or 'EXCELLENT' audio levels.\n",
@@ -1700,11 +1687,11 @@ class MicrophoneTranscriberGUI:
 
 3. TRANSCRIPTS:
    • View results in the Combined View, Logs, or Transcripts tabs
-   • Save transcripts using File menu or the Save button
+   • Transcripts are automatically saved to markdown files in real-time
    • Transcripts include timestamps and device identification
 
 4. CONFIGURATION:
-   • Save your microphone selection for future use
+   • Load saved microphone selections from File menu
    • Use the menu system for advanced configuration
    • Monitor performance through status indicators
 
