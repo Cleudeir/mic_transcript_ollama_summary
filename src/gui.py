@@ -4,6 +4,7 @@ from tkinter import messagebox, ttk, filedialog
 import json
 import os
 import datetime
+import ollama
 from src.capture_audio import (
     get_microphone_list,
     capture_audio_with_callback,
@@ -117,10 +118,18 @@ class MicrophoneTranscriberGUI:
         self.setup_output_mapping()
 
         # Initialize missing components
-        self.ollama_service = OllamaService()
+        # Initialize OllamaService with current config values (only if they exist)
+        ollama_config = self.config.get("ollama", {})
+        self.ollama_service = OllamaService(
+            model_name=ollama_config.get("model_name") if "model_name" in ollama_config else None,
+            base_url=ollama_config.get("base_url") if "base_url" in ollama_config else None
+        )
 
         # Migrate old mic_config.json to unified config.json if needed
         self.migrate_old_mic_config()
+        
+        # Ensure service is synchronized with current config
+        self.sync_ollama_service_with_config()
 
         # Initialize Ollama connection and load models on startup
         self.root.after(1000, self.initialize_ollama_on_startup)
@@ -692,6 +701,11 @@ class MicrophoneTranscriberGUI:
         tk.Label(url_frame, text="Ollama URL:", font=("Arial", 10, "bold")).pack(
             anchor=tk.W
         )
+        
+        # Add help text
+        tk.Label(url_frame, text="Enter your Ollama server URL (e.g., http://localhost:11434)", 
+                font=("Arial", 8), fg="gray").pack(anchor=tk.W)
+        
         self.ollama_url_var = tk.StringVar()
         self.ollama_url_entry = tk.Entry(
             url_frame, textvariable=self.ollama_url_var, width=50
@@ -699,8 +713,7 @@ class MicrophoneTranscriberGUI:
         self.ollama_url_entry.pack(fill=tk.X, pady=(2, 5))
 
         # Set placeholder text when empty
-        self.ollama_url_entry.bind("<FocusIn>", self._on_url_focus_in)
-        self.ollama_url_entry.bind("<FocusOut>", self._on_url_focus_out)
+        # Remove auto-population - let users enter their own values
 
         self.ollama_url_var.trace("w", self.on_ollama_url_change)
 
@@ -774,30 +787,64 @@ class MicrophoneTranscriberGUI:
                 with open(self.config_file, "r") as f:
                     config = json.load(f)
 
-            # Load current Ollama URL from service or config
-            current_url = getattr(self.ollama_service, "base_url", None)
-            if not current_url or current_url.strip() == "":
-                # Try to load from config file
-                ollama_config = config.get("ollama", {})
-                current_url = ollama_config.get("base_url", "http://localhost:11434")
-                self.ollama_service.base_url = current_url
-            self.ollama_url_var.set(current_url)
+            # Get Ollama config from file
+            ollama_config = config.get("ollama", {})
+            
+            # Only populate URL if it exists in config (don't use defaults)
+            if "base_url" in ollama_config:
+                current_url = ollama_config["base_url"]
+                
+                # Update the service with the config file values
+                if current_url and current_url != self.ollama_service.base_url:
+                    self.ollama_service.base_url = current_url
+                    # Reinitialize client with new URL
+                    self.ollama_service.client = ollama.Client(host=current_url, timeout=30)
+                
+                self.ollama_url_var.set(current_url)
+            else:
+                # Leave URL field empty if no config exists
+                self.ollama_url_var.set("")
 
-            # Load current model from service or config
-            current_model = getattr(self.ollama_service, "model_name", None)
-            if not current_model:
-                # Try to load from config file
-                ollama_config = config.get("ollama", {})
-                current_model = ollama_config.get("model_name", "llama3.2")
-                self.ollama_service.model_name = current_model
-            self.model_var.set(current_model)
+            # Only populate model if it exists in config (don't use defaults)
+            if "model_name" in ollama_config:
+                current_model = ollama_config["model_name"]
+                
+                # Update the service with the config file values
+                if current_model and current_model != self.ollama_service.model_name:
+                    self.ollama_service.model_name = current_model
+                
+                self.model_var.set(current_model)
+            else:
+                # Leave model field empty if no config exists
+                self.model_var.set("")
 
-            # Auto-test connection and load models when URL is populated
-            if current_url:
+            # Only auto-test connection if URL was actually loaded from config
+            if "base_url" in ollama_config and ollama_config["base_url"]:
                 self.root.after(100, self._auto_test_connection_and_load_models)
 
         except Exception as e:
             self.status_var.set(f"Error loading config: {e}")
+
+    def sync_ollama_service_with_config(self):
+        """Ensure OllamaService is synchronized with the current configuration"""
+        try:
+            ollama_config = self.config.get("ollama", {})
+            
+            # Only update URL if it exists in config (no defaults)
+            if "base_url" in ollama_config:
+                config_url = ollama_config["base_url"]
+                if config_url and config_url != self.ollama_service.base_url:
+                    self.ollama_service.base_url = config_url
+                    self.ollama_service.client = ollama.Client(host=config_url, timeout=30)
+            
+            # Only update model if it exists in config (no defaults)
+            if "model_name" in ollama_config:
+                config_model = ollama_config["model_name"]
+                if config_model and config_model != self.ollama_service.model_name:
+                    self.ollama_service.model_name = config_model
+                
+        except Exception as e:
+            print(f"Error syncing Ollama service with config: {e}")
 
     def _auto_test_connection_and_load_models(self):
         """Automatically test connection and load models after URL is set"""
@@ -922,41 +969,42 @@ class MicrophoneTranscriberGUI:
         try:
             new_url = self.ollama_url_var.get().strip()
             if new_url and new_url != self.ollama_service.base_url:
-                # Update configuration
+                # Update configuration in both service and GUI
                 success = self.ollama_service.update_config(ollama_url=new_url)
                 if success:
-                    self.status_var.set("Ollama URL updated")
+                    # Also update the GUI's config
+                    self.config.setdefault("ollama", {})["base_url"] = new_url
+                    self.save_main_config()
+                    
+                    self.status_var.set("Ollama URL updated and saved")
                     # Clear models list since URL changed
                     self.model_combobox["values"] = []
                     self.model_var.set("")
                     # Auto-test connection and load models after URL change
                     self.root.after(200, self._auto_test_connection_and_load_models)
+                else:
+                    self.status_var.set("Failed to save Ollama URL")
         except Exception as e:
             self.status_var.set(f"Error updating Ollama URL: {e}")
-
-    def _on_url_focus_in(self, event):
-        """Handle URL entry focus in - show default if empty"""
-        if not self.ollama_url_var.get().strip():
-            self.ollama_url_var.set("http://localhost:11434")
-            self.ollama_url_entry.selection_range(0, tk.END)
-
-    def _on_url_focus_out(self, event):
-        """Handle URL entry focus out - set default if empty"""
-        if not self.ollama_url_var.get().strip():
-            self.ollama_url_var.set("http://localhost:11434")
 
     def on_model_change(self, event=None):
         """Handle model selection changes"""
         try:
             new_model = self.model_var.get()
             if new_model and new_model != self.ollama_service.model_name:
-                # Update configuration
+                # Update configuration in both service and GUI
                 success = self.ollama_service.update_config(model_name=new_model)
                 if success:
-                    self.status_var.set(f"Model updated to: {new_model}")
+                    # Also update the GUI's config
+                    self.config.setdefault("ollama", {})["model_name"] = new_model
+                    self.save_main_config()
+                    
+                    self.status_var.set(f"Model updated and saved: {new_model}")
                     self.model_status_label.config(
                         text=f"Active model: {new_model}", fg="green"
                     )
+                else:
+                    self.status_var.set(f"Failed to save model: {new_model}")
         except Exception as e:
             self.status_var.set(f"Error updating model: {e}")
 
@@ -1026,6 +1074,11 @@ class MicrophoneTranscriberGUI:
     def initialize_ollama_on_startup(self):
         """Initialize Ollama connection, load models, and send greeting on app startup"""
         try:
+            # Only initialize if we have a valid URL configured
+            if not hasattr(self.ollama_service, 'base_url') or not self.ollama_service.base_url:
+                self.status_var.set("Configure Ollama URL in the Ollama Configuration tab")
+                return
+                
             self.status_var.set("Initializing Ollama connection...")
             self.root.update_idletasks()
             
@@ -1048,7 +1101,7 @@ class MicrophoneTranscriberGUI:
                     if hasattr(self, 'model_combobox'):
                         self.model_combobox["values"] = models
                         
-                        # Set current model
+                        # Set current model only if one is configured
                         current_model = self.ollama_service.model_name
                         if current_model in models:
                             self.model_var.set(current_model)

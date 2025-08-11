@@ -1,7 +1,7 @@
 {
     "ollama": {
-        "base_url": "http://localhost:11434",
-        "model_name": "llama3.2:3b",
+        "base_url": "https://api.apps.tec.br/ollama/",
+        "model_name": "gemma3:latest",
         "temperature": 0.3,
         "top_p": 0.8,
         "num_predict": 2048
