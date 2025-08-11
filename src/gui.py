@@ -24,7 +24,7 @@ class MicrophoneTranscriberGUI:
 
     def __init__(self):
         self.root = tk.Tk()
-        self.root.geometry("900x700")
+        self.root.geometry("1000x700")
 
         # Initialize configuration early
         self.config_file = "config.json"
@@ -49,20 +49,22 @@ class MicrophoneTranscriberGUI:
         # Load and ensure main config exists with defaults (need this before setting title)
         self.config = self.load_main_config()
         self.ensure_config_file_exists()
-        
+
         # Sync instance variables with config
         self.auto_generate_ata = self.config.get("auto_generate_ata", True)
 
         # Initialize translation system with language from config
         set_global_language(self.config.get("language", "pt-BR"))
         self.translation_manager = get_translation_manager()
-        
+
         # Set window title using translation
         self.root.title(t("app_title", "Meeting Audio Transcriber"))
 
         # Title
         title_label = tk.Label(
-            self.root, text=t("app_title", "Meeting Audio Transcriber"), font=("Arial", 16, "bold")
+            self.root,
+            text=t("app_title", "Meeting Audio Transcriber"),
+            font=("Arial", 16, "bold"),
         )
         title_label.pack(pady=10)
 
@@ -77,6 +79,7 @@ class MicrophoneTranscriberGUI:
         self.create_ata_files_tab()
         self.create_mic_config_tab()
         self.create_ollama_config_tab()
+        self.create_language_settings_tab()
 
         # Set up output mapping after tabs are created
         self.setup_output_mapping()
@@ -85,13 +88,19 @@ class MicrophoneTranscriberGUI:
         # Initialize OllamaService with current config values (only if they exist)
         ollama_config = self.config.get("ollama", {})
         self.ollama_service = OllamaService(
-            model_name=ollama_config.get("model_name") if "model_name" in ollama_config else None,
-            base_url=ollama_config.get("base_url") if "base_url" in ollama_config else None
+            model_name=(
+                ollama_config.get("model_name")
+                if "model_name" in ollama_config
+                else None
+            ),
+            base_url=(
+                ollama_config.get("base_url") if "base_url" in ollama_config else None
+            ),
         )
 
         # Migrate old mic_config.json to unified config.json if needed
         self.migrate_old_mic_config()
-        
+
         # Ensure service is synchronized with current config
         self.sync_ollama_service_with_config()
 
@@ -122,18 +131,21 @@ class MicrophoneTranscriberGUI:
         menubar.add_cascade(label=t("menu_settings", "⚙️ Settings"), menu=settings_menu)
 
         settings_menu.add_command(
-            label=t("menu_language", "🌐 Language Settings"), command=self.open_language_settings
+            label=t("menu_language", "🌐 Language Settings"),
+            command=self.open_language_settings,
         )
         settings_menu.add_command(
             label=t("menu_audio", "🔊 Audio Settings"), command=self.open_audio_settings
         )
         settings_menu.add_separator()
         settings_menu.add_command(
-            label=t("menu_auto_ata", "🤖 Auto-generate Ata"), command=self.toggle_auto_ata_generation
+            label=t("menu_auto_ata", "🤖 Auto-generate Ata"),
+            command=self.toggle_auto_ata_generation,
         )
         settings_menu.add_separator()
         settings_menu.add_command(
-            label=t("menu_performance", "📊 Performance Monitor"), command=self.toggle_performance_monitor
+            label=t("menu_performance", "📊 Performance Monitor"),
+            command=self.toggle_performance_monitor,
         )
 
         # File menu
@@ -141,20 +153,25 @@ class MicrophoneTranscriberGUI:
         menubar.add_cascade(label=t("menu_file", "📁 File"), menu=file_menu)
 
         file_menu.add_command(
-            label=t("menu_open_transcript_folder", "📄 Open Transcript Folder"), command=self.open_transcript_folder
+            label=t("menu_open_transcript_folder", "📄 Open Transcript Folder"),
+            command=self.open_transcript_folder,
         )
         file_menu.add_command(
-            label=t("menu_view_transcripts", "📋 View All Transcripts"), command=self.view_all_transcripts
+            label=t("menu_view_transcripts", "📋 View All Transcripts"),
+            command=self.view_all_transcripts,
         )
         file_menu.add_separator()
         file_menu.add_command(
             label=t("menu_generate_minutes", "🤖 Generate Meeting Minutes"),
             command=self.generate_meeting_minutes_dialog,
         )
-        file_menu.add_command(label=t("menu_view_atas", "📝 View All Atas"), command=self.view_all_atas)
+        file_menu.add_command(
+            label=t("menu_view_atas", "📝 View All Atas"), command=self.view_all_atas
+        )
         file_menu.add_separator()
         file_menu.add_command(
-            label=t("menu_reset", "🔄 Reset Application"), command=self.reset_application
+            label=t("menu_reset", "🔄 Reset Application"),
+            command=self.reset_application,
         )
         file_menu.add_separator()
         file_menu.add_command(label=t("menu_exit", "❌ Exit"), command=self.on_closing)
@@ -163,9 +180,12 @@ class MicrophoneTranscriberGUI:
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label=t("menu_help", "❓ Help"), menu=help_menu)
 
-        help_menu.add_command(label=t("menu_user_guide", "📖 User Guide"), command=self.show_user_guide)
         help_menu.add_command(
-            label=t("menu_troubleshooting", "🔧 Troubleshooting"), command=self.show_troubleshooting
+            label=t("menu_user_guide", "📖 User Guide"), command=self.show_user_guide
+        )
+        help_menu.add_command(
+            label=t("menu_troubleshooting", "🔧 Troubleshooting"),
+            command=self.show_troubleshooting,
         )
         help_menu.add_separator()
         help_menu.add_command(label=t("menu_about", "ℹ️ About"), command=self.show_about)
@@ -342,7 +362,9 @@ class MicrophoneTranscriberGUI:
     def create_transcripts_tab(self):
         """Create the transcripts tab showing only the transcribed text"""
         transcripts_frame = ttk.Frame(self.notebook)
-        self.notebook.add(transcripts_frame, text=t("tab_transcripts", "📄 Transcripts Only"))
+        self.notebook.add(
+            transcripts_frame, text=t("tab_transcripts", "📄 Transcripts Only")
+        )
 
         # Create paned window for two microphones
         transcripts_paned = ttk.PanedWindow(transcripts_frame, orient=tk.HORIZONTAL)
@@ -389,7 +411,10 @@ class MicrophoneTranscriberGUI:
     def create_transcript_files_tab(self):
         """Create the transcript files management tab"""
         transcript_files_frame = ttk.Frame(self.notebook)
-        self.notebook.add(transcript_files_frame, text="� Transcript Files")
+        self.notebook.add(
+            transcript_files_frame,
+            text=t("tab_transcript_files", "📁 Transcript Files"),
+        )
 
         # Main container
         main_container = tk.Frame(transcript_files_frame)
@@ -397,7 +422,9 @@ class MicrophoneTranscriberGUI:
 
         # Transcript files list section
         transcript_section = ttk.LabelFrame(
-            main_container, text="📄    ", padding=10
+            main_container,
+            text=t("tab_transcript_files", "📄 Transcript Files"),
+            padding=10,
         )
         transcript_section.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
 
@@ -405,13 +432,21 @@ class MicrophoneTranscriberGUI:
         transcript_list_frame = tk.Frame(transcript_section)
         transcript_list_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.transcript_files_listbox = tk.Listbox(transcript_list_frame, selectmode=tk.SINGLE)
+        self.transcript_files_listbox = tk.Listbox(
+            transcript_list_frame, selectmode=tk.SINGLE
+        )
         transcript_scrollbar = tk.Scrollbar(
-            transcript_list_frame, orient=tk.VERTICAL, command=self.transcript_files_listbox.yview
+            transcript_list_frame,
+            orient=tk.VERTICAL,
+            command=self.transcript_files_listbox.yview,
         )
         self.transcript_files_listbox.configure(yscrollcommand=transcript_scrollbar.set)
-        self.transcript_files_listbox.bind("<Double-Button-1>", self.open_selected_transcript_file)
-        self.transcript_files_listbox.bind("<<ListboxSelect>>", self.on_transcript_file_select)
+        self.transcript_files_listbox.bind(
+            "<Double-Button-1>", self.open_selected_transcript_file
+        )
+        self.transcript_files_listbox.bind(
+            "<<ListboxSelect>>", self.on_transcript_file_select
+        )
 
         self.transcript_files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         transcript_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -422,7 +457,7 @@ class MicrophoneTranscriberGUI:
 
         refresh_transcript_btn = tk.Button(
             transcript_buttons_frame,
-            text="🔄 Refresh",
+            text=t("button_refresh", "🔄 Refresh"),
             command=self.refresh_transcript_files_list,
             bg="#e3f2fd",
             relief="groove",
@@ -435,38 +470,38 @@ class MicrophoneTranscriberGUI:
 
         self.open_transcript_btn = tk.Button(
             self.transcript_file_ops_frame,
-            text="📖 Open",
+            text=t("button_open", "📖 Open"),
             command=self.open_selected_transcript_file,
             bg="#e8f5e8",
             relief="groove",
-            state="disabled"
+            state="disabled",
         )
         self.open_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         self.save_transcript_as_btn = tk.Button(
             self.transcript_file_ops_frame,
-            text="� Save As",
+            text=t("button_save_as", "💾 Save As"),
             command=self.save_transcript_as,
             bg="#fff3e0",
             relief="groove",
-            state="disabled"
+            state="disabled",
         )
         self.save_transcript_as_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         self.regenerate_ata_btn = tk.Button(
             self.transcript_file_ops_frame,
-            text="🤖 Regenerate ATA",
+            text=t("button_regenerate_ata", "🤖 Regenerate ATA"),
             command=self.regenerate_ata_from_selected,
             bg="#4CAF50",
             fg="white",
             relief="groove",
-            state="disabled"
+            state="disabled",
         )
         self.regenerate_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         open_transcript_folder_btn = tk.Button(
             transcript_buttons_frame,
-            text="📁 Open Folder",
+            text=t("button_open_folder", "📁 Open Folder"),
             command=self.open_transcript_folder,
             bg="#fff3e0",
             relief="groove",
@@ -479,7 +514,7 @@ class MicrophoneTranscriberGUI:
     def create_ata_files_tab(self):
         """Create the ATA summary files management tab"""
         ata_files_frame = ttk.Frame(self.notebook)
-        self.notebook.add(ata_files_frame, text=t("tab_ata_files", "� ATA Files"))
+        self.notebook.add(ata_files_frame, text=t("tab_ata_files", "📝 ATA Files"))
 
         # Main container
         main_container = tk.Frame(ata_files_frame)
@@ -512,7 +547,7 @@ class MicrophoneTranscriberGUI:
 
         refresh_ata_btn = tk.Button(
             ata_buttons_frame,
-            text="🔄 Refresh",
+            text=t("button_refresh", "🔄 Refresh"),
             command=self.refresh_ata_files_list,
             bg="#e3f2fd",
             relief="groove",
@@ -525,27 +560,27 @@ class MicrophoneTranscriberGUI:
 
         self.open_ata_btn = tk.Button(
             self.ata_file_ops_frame,
-            text="📖 Open",
+            text=t("button_open", "📖 Open"),
             command=self.open_selected_ata_file,
             bg="#e8f5e8",
             relief="groove",
-            state="disabled"
+            state="disabled",
         )
         self.open_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         self.save_ata_as_btn = tk.Button(
             self.ata_file_ops_frame,
-            text="� Save As",
+            text=t("button_save_as", "💾 Save As"),
             command=self.save_ata_as,
             bg="#fff3e0",
             relief="groove",
-            state="disabled"
+            state="disabled",
         )
         self.save_ata_as_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         open_ata_folder_btn = tk.Button(
             ata_buttons_frame,
-            text="📁 Open Folder",
+            text=t("button_open_folder", "📁 Open Folder"),
             command=self.open_ata_folder,
             bg="#fff3e0",
             relief="groove",
@@ -564,7 +599,7 @@ class MicrophoneTranscriberGUI:
             font=("Arial", 9),
             fg="gray",
             justify=tk.LEFT,
-            anchor="w"
+            anchor="w",
         )
         self.ata_info_label.pack(fill=tk.X, pady=5)
 
@@ -574,7 +609,9 @@ class MicrophoneTranscriberGUI:
     def create_mic_config_tab(self):
         """Create the microphone configuration tab"""
         mic_config_frame = ttk.Frame(self.notebook)
-        self.notebook.add(mic_config_frame, text=t("tab_mic_config", "🎤 Microphone Configuration"))
+        self.notebook.add(
+            mic_config_frame, text=t("tab_mic_config", "🎤 Microphone Configuration")
+        )
 
         # Create main container with scrollable frame
         canvas = tk.Canvas(mic_config_frame)
@@ -624,7 +661,9 @@ class MicrophoneTranscriberGUI:
     def create_ollama_config_tab(self):
         """Create the Ollama configuration tab"""
         ollama_config_frame = ttk.Frame(self.notebook)
-        self.notebook.add(ollama_config_frame, text=t("tab_ollama_config", "🤖 Ollama Configuration"))
+        self.notebook.add(
+            ollama_config_frame, text=t("tab_ollama_config", "🤖 Ollama Configuration")
+        )
 
         # Create main container with scrollable frame
         canvas = tk.Canvas(ollama_config_frame)
@@ -651,15 +690,21 @@ class MicrophoneTranscriberGUI:
         tk.Label(url_frame, text="Ollama URL:", font=("Arial", 10, "bold")).pack(
             anchor=tk.W
         )
-        
+
         # Add help text
-        tk.Label(url_frame, text="Enter your Ollama server URL (e.g., http://localhost:11434)", 
-                font=("Arial", 8), fg="gray").pack(anchor=tk.W)
-        
+        tk.Label(
+            url_frame,
+            text="Enter your Ollama server URL (e.g., http://localhost:11434)",
+            font=("Arial", 8),
+            fg="gray",
+        ).pack(anchor=tk.W)
+
         # URL status label (shows if loaded from config)
-        self.url_status_label = tk.Label(url_frame, text="", font=("Arial", 8), fg="green")
+        self.url_status_label = tk.Label(
+            url_frame, text="", font=("Arial", 8), fg="green"
+        )
         self.url_status_label.pack(anchor=tk.W)
-        
+
         self.ollama_url_var = tk.StringVar()
         self.ollama_url_entry = tk.Entry(
             url_frame, textvariable=self.ollama_url_var, width=50
@@ -736,6 +781,121 @@ class MicrophoneTranscriberGUI:
         # Load current configuration
         self.load_config_tab_values()
 
+    def create_language_settings_tab(self):
+        """Create the language settings tab"""
+        language_frame = ttk.Frame(self.notebook)
+        self.notebook.add(
+            language_frame, text=t("menu_language", "🌐 Language Settings")
+        )
+
+        # Main container
+        main_container = tk.Frame(language_frame)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # Title
+        title_label = tk.Label(
+            main_container,
+            text=t("language_settings_title", "Language Settings"),
+            font=("Arial", 16, "bold"),
+        )
+        title_label.pack(pady=(0, 20))
+
+        # Description
+        desc_label = tk.Label(
+            main_container,
+            text=t(
+                "language_description",
+                "Select your preferred language for the application interface",
+            ),
+            font=("Arial", 10),
+            fg="gray",
+        )
+        desc_label.pack(pady=(0, 30))
+
+        # Current language section
+        current_section = ttk.LabelFrame(
+            main_container, text=t("language_current", "Current Language"), padding=15
+        )
+        current_section.pack(fill=tk.X, pady=(0, 20))
+
+        self.current_language_display = tk.Label(
+            current_section,
+            text=self.translation_manager.get_language_name(
+                self.config.get("language", "pt-BR")
+            ),
+            font=("Arial", 14, "bold"),
+            fg="blue",
+        )
+        self.current_language_display.pack()
+
+        # Language selection section
+        selection_section = ttk.LabelFrame(
+            main_container, text=t("language_select", "Select Language"), padding=15
+        )
+        selection_section.pack(fill=tk.X, pady=(0, 30))
+
+        # Language selection variable
+        self.selected_language_var = tk.StringVar(
+            value=self.config.get("language", "pt-BR")
+        )
+
+        # Create radio buttons for each language
+        languages_frame = tk.Frame(selection_section)
+        languages_frame.pack(fill=tk.X)
+
+        for (
+            lang_code,
+            lang_name,
+        ) in self.translation_manager.get_available_languages().items():
+            lang_frame = tk.Frame(languages_frame)
+            lang_frame.pack(fill=tk.X, pady=5)
+
+            radio = tk.Radiobutton(
+                lang_frame,
+                text=f"{lang_name} ({lang_code})",
+                variable=self.selected_language_var,
+                value=lang_code,
+                font=("Arial", 12),
+                command=self.on_language_radio_change,
+            )
+            radio.pack(anchor=tk.W)
+
+        # Buttons section
+        buttons_frame = tk.Frame(main_container)
+        buttons_frame.pack(fill=tk.X, pady=(20, 0))
+
+        # Apply button
+        apply_btn = tk.Button(
+            buttons_frame,
+            text=t("button_apply", "✅ Apply Changes"),
+            command=self.apply_language_change,
+            font=("Arial", 12, "bold"),
+            bg="#4CAF50",
+            fg="white",
+            padx=20,
+            pady=10,
+        )
+        apply_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+        # Reset button
+        reset_btn = tk.Button(
+            buttons_frame,
+            text=t("button_reset", "🔄 Reset to Current"),
+            command=self.reset_language_selection,
+            font=("Arial", 12),
+            bg="#ff9800",
+            fg="white",
+            padx=20,
+            pady=10,
+        )
+        reset_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+        # Status label
+        self.language_status_label = tk.Label(
+            main_container, text="", font=("Arial", 10), fg="green"
+        )
+        self.language_status_label.pack(pady=(20, 0))
+
     def load_config_tab_values(self):
         """Load current configuration values into the config tab from unified config.json"""
         try:
@@ -747,35 +907,39 @@ class MicrophoneTranscriberGUI:
 
             # Get Ollama config from file
             ollama_config = config.get("ollama", {})
-            
+
             # Only populate URL if it exists in config (don't use defaults)
             if "base_url" in ollama_config:
                 current_url = ollama_config["base_url"]
-                
+
                 # Update the service with the config file values
                 if current_url and current_url != self.ollama_service.base_url:
                     self.ollama_service.base_url = current_url
                     # Reinitialize client with new URL
-                    self.ollama_service.client = ollama.Client(host=current_url, timeout=30)
-                
+                    self.ollama_service.client = ollama.Client(
+                        host=current_url, timeout=30
+                    )
+
                 self.ollama_url_var.set(current_url)
                 # Show status that URL was loaded from config
-                if hasattr(self, 'url_status_label'):
-                    self.url_status_label.config(text="✓ URL loaded from configuration", fg="green")
+                if hasattr(self, "url_status_label"):
+                    self.url_status_label.config(
+                        text="✓ URL loaded from configuration", fg="green"
+                    )
             else:
                 # Leave URL field empty if no config exists
                 self.ollama_url_var.set("")
-                if hasattr(self, 'url_status_label'):
+                if hasattr(self, "url_status_label"):
                     self.url_status_label.config(text="No URL configured", fg="orange")
 
             # Only populate model if it exists in config (don't use defaults)
             if "model_name" in ollama_config:
                 current_model = ollama_config["model_name"]
-                
+
                 # Update the service with the config file values
                 if current_model and current_model != self.ollama_service.model_name:
                     self.ollama_service.model_name = current_model
-                
+
                 self.model_var.set(current_model)
             else:
                 # Leave model field empty if no config exists
@@ -792,25 +956,27 @@ class MicrophoneTranscriberGUI:
         """Ensure configuration is properly loaded and displayed in UI"""
         try:
             # Force reload the configuration to ensure UI is updated
-            if hasattr(self, 'ollama_url_var') and hasattr(self, 'model_var'):
+            if hasattr(self, "ollama_url_var") and hasattr(self, "model_var"):
                 # Load config from file
                 config = {}
                 if os.path.exists(self.config_file):
                     with open(self.config_file, "r") as f:
                         config = json.load(f)
-                
+
                 ollama_config = config.get("ollama", {})
-                
+
                 # Explicitly set the URL in the UI
                 if "base_url" in ollama_config:
                     url = ollama_config["base_url"]
                     self.ollama_url_var.set(url)
-                    if hasattr(self, 'url_status_label'):
-                        self.url_status_label.config(text="✓ URL loaded from configuration", fg="green")
+                    if hasattr(self, "url_status_label"):
+                        self.url_status_label.config(
+                            text="✓ URL loaded from configuration", fg="green"
+                        )
                     self.status_var.set(f"Configuration loaded: {url}")
                 else:
                     self.status_var.set("No URL found in configuration")
-                    
+
                 # Force UI update
                 self.root.update_idletasks()
         except Exception as e:
@@ -820,20 +986,22 @@ class MicrophoneTranscriberGUI:
         """Ensure OllamaService is synchronized with the current configuration"""
         try:
             ollama_config = self.config.get("ollama", {})
-            
+
             # Only update URL if it exists in config (no defaults)
             if "base_url" in ollama_config:
                 config_url = ollama_config["base_url"]
                 if config_url and config_url != self.ollama_service.base_url:
                     self.ollama_service.base_url = config_url
-                    self.ollama_service.client = ollama.Client(host=config_url, timeout=30)
-            
+                    self.ollama_service.client = ollama.Client(
+                        host=config_url, timeout=30
+                    )
+
             # Only update model if it exists in config (no defaults)
             if "model_name" in ollama_config:
                 config_model = ollama_config["model_name"]
                 if config_model and config_model != self.ollama_service.model_name:
                     self.ollama_service.model_name = config_model
-                
+
         except Exception as e:
             print(f"Error syncing Ollama service with config: {e}")
 
@@ -966,7 +1134,7 @@ class MicrophoneTranscriberGUI:
                     # Also update the GUI's config
                     self.config.setdefault("ollama", {})["base_url"] = new_url
                     self.save_main_config()
-                    
+
                     self.status_var.set("Ollama URL updated and saved")
                     # Clear models list since URL changed
                     self.model_combobox["values"] = []
@@ -989,7 +1157,7 @@ class MicrophoneTranscriberGUI:
                     # Also update the GUI's config
                     self.config.setdefault("ollama", {})["model_name"] = new_model
                     self.save_main_config()
-                    
+
                     self.status_var.set(f"Model updated and saved: {new_model}")
                     self.model_status_label.config(
                         text=f"Active model: {new_model}", fg="green"
@@ -1066,70 +1234,78 @@ class MicrophoneTranscriberGUI:
         """Initialize Ollama connection, load models, and send greeting on app startup"""
         try:
             # Only initialize if we have a valid URL configured
-            if not hasattr(self.ollama_service, 'base_url') or not self.ollama_service.base_url:
-                self.status_var.set("Configure Ollama URL in the Ollama Configuration tab")
+            if (
+                not hasattr(self.ollama_service, "base_url")
+                or not self.ollama_service.base_url
+            ):
+                self.status_var.set(
+                    "Configure Ollama URL in the Ollama Configuration tab"
+                )
                 return
-                
+
             self.status_var.set("Initializing Ollama connection...")
             self.root.update_idletasks()
-            
+
             # Test connection first
             if self.ollama_service.is_ollama_available():
                 self.status_var.set("Ollama connected! Loading models...")
                 self.root.update_idletasks()
-                
+
                 # Update connection status in the config tab
-                if hasattr(self, 'connection_status_label'):
+                if hasattr(self, "connection_status_label"):
                     self.connection_status_label.config(
                         text="✅ Connection successful", fg="green"
                     )
-                
+
                 # Load models
                 models = self.ollama_service.get_available_models()
-                
+
                 if models:
                     # Update model combobox if it exists
-                    if hasattr(self, 'model_combobox'):
+                    if hasattr(self, "model_combobox"):
                         self.model_combobox["values"] = models
-                        
+
                         # Set current model only if one is configured
                         current_model = self.ollama_service.model_name
                         if current_model in models:
                             self.model_var.set(current_model)
-                            if hasattr(self, 'model_status_label'):
+                            if hasattr(self, "model_status_label"):
                                 self.model_status_label.config(
                                     text=f"Active model: {current_model}", fg="green"
                                 )
                         else:
                             # Set first model as default
                             self.model_var.set(models[0])
-                            if hasattr(self, 'model_status_label'):
+                            if hasattr(self, "model_status_label"):
                                 self.model_status_label.config(
-                                    text=f"Available models loaded ({len(models)})", fg="blue"
+                                    text=f"Available models loaded ({len(models)})",
+                                    fg="blue",
                                 )
-                    
+
                     self.status_var.set(f"Models loaded! ({len(models)} available)")
                     self.root.update_idletasks()
-                    
+
                     # Send a "hi" greeting to the model
                     self.root.after(500, self.send_greeting_to_model)
-                    
+
                 else:
                     self.status_var.set("Ollama connected but no models available")
-                    if hasattr(self, 'model_status_label'):
-                        self.model_status_label.config(text="No models available", fg="red")
-                
+                    if hasattr(self, "model_status_label"):
+                        self.model_status_label.config(
+                            text="No models available", fg="red"
+                        )
+
             else:
                 self.status_var.set("Could not connect to Ollama service")
-                if hasattr(self, 'connection_status_label'):
+                if hasattr(self, "connection_status_label"):
                     self.connection_status_label.config(
                         text="❌ Connection failed", fg="red"
                     )
-                if hasattr(self, 'model_status_label'):
+                if hasattr(self, "model_status_label"):
                     self.model_status_label.config(
                         text="Fix connection to load models", fg="red"
                     )
-                    
+
         except Exception as e:
             self.status_var.set(f"Error initializing Ollama: {str(e)[:50]}...")
             print(f"Ollama initialization error: {e}")
@@ -1139,10 +1315,10 @@ class MicrophoneTranscriberGUI:
         try:
             self.status_var.set("Testing model with greeting...")
             self.root.update_idletasks()
-            
+
             # Use the existing test method in OllamaService
             result = self.ollama_service.test_model_with_hello()
-            
+
             if result.get("success", False):
                 response = result.get("response", "")
                 self.status_var.set(f"✅ Model ready! Response: {response[:30]}...")
@@ -1151,7 +1327,7 @@ class MicrophoneTranscriberGUI:
                 error = result.get("error", "Unknown error")
                 self.status_var.set(f"Model test failed: {error[:40]}...")
                 print(f"Model greeting error: {error}")
-                
+
         except Exception as e:
             self.status_var.set(f"Model test error: {str(e)[:40]}...")
             print(f"Model greeting error: {e}")
@@ -1370,7 +1546,9 @@ class MicrophoneTranscriberGUI:
             self.transcript_files_listbox.delete(0, tk.END)
 
             # Check transcript directory
-            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            transcript_dir = os.path.join(
+                os.path.dirname(__file__), "output", "transcript"
+            )
             if not os.path.exists(transcript_dir):
                 os.makedirs(transcript_dir)
                 return
@@ -1378,7 +1556,7 @@ class MicrophoneTranscriberGUI:
             # Get transcript files
             files = []
             for file in os.listdir(transcript_dir):
-                if file.endswith('.md'):
+                if file.endswith(".md"):
                     file_path = os.path.join(transcript_dir, file)
                     file_time = os.path.getmtime(file_path)
                     files.append((file, file_time))
@@ -1398,11 +1576,15 @@ class MicrophoneTranscriberGUI:
         try:
             selection = self.transcript_files_listbox.curselection()
             if not selection:
-                messagebox.showwarning("Warning", "Please select a transcript file to open")
+                messagebox.showwarning(
+                    "Warning", "Please select a transcript file to open"
+                )
                 return
 
             filename = self.transcript_files_listbox.get(selection[0])
-            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            transcript_dir = os.path.join(
+                os.path.dirname(__file__), "output", "transcript"
+            )
             file_path = os.path.join(transcript_dir, filename)
 
             if os.path.exists(file_path):
@@ -1428,15 +1610,21 @@ class MicrophoneTranscriberGUI:
         try:
             selection = self.transcript_files_listbox.curselection()
             if not selection:
-                messagebox.showwarning("Warning", "Please select a transcript file to delete")
+                messagebox.showwarning(
+                    "Warning", "Please select a transcript file to delete"
+                )
                 return
 
             filename = self.transcript_files_listbox.get(selection[0])
-            
-            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete '{filename}'?"):
-                transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+
+            if messagebox.askyesno(
+                "Confirm Delete", f"Are you sure you want to delete '{filename}'?"
+            ):
+                transcript_dir = os.path.join(
+                    os.path.dirname(__file__), "output", "transcript"
+                )
                 file_path = os.path.join(transcript_dir, filename)
-                
+
                 if os.path.exists(file_path):
                     os.remove(file_path)
                     self.refresh_transcript_files_list()
@@ -1450,7 +1638,9 @@ class MicrophoneTranscriberGUI:
     def open_transcript_folder(self):
         """Open the transcript folder in file explorer"""
         try:
-            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            transcript_dir = os.path.join(
+                os.path.dirname(__file__), "output", "transcript"
+            )
             if not os.path.exists(transcript_dir):
                 os.makedirs(transcript_dir)
 
@@ -1484,7 +1674,7 @@ class MicrophoneTranscriberGUI:
             # Get ATA files
             files = []
             for file in os.listdir(ata_dir):
-                if file.endswith('.md'):
+                if file.endswith(".md"):
                     file_path = os.path.join(ata_dir, file)
                     file_time = os.path.getmtime(file_path)
                     files.append((file, file_time))
@@ -1500,12 +1690,12 @@ class MicrophoneTranscriberGUI:
             if files:
                 self.ata_info_label.config(
                     text=f"Found {len(files)} ATA summary file(s). Double-click to open.",
-                    fg="blue"
+                    fg="blue",
                 )
             else:
                 self.ata_info_label.config(
                     text="No ATA summary files found. Generate meeting minutes from transcript files.",
-                    fg="gray"
+                    fg="gray",
                 )
 
         except Exception as e:
@@ -1550,11 +1740,13 @@ class MicrophoneTranscriberGUI:
                 return
 
             filename = self.ata_files_listbox.get(selection[0])
-            
-            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete '{filename}'?"):
+
+            if messagebox.askyesno(
+                "Confirm Delete", f"Are you sure you want to delete '{filename}'?"
+            ):
                 ata_dir = os.path.join(os.path.dirname(__file__), "output", "ata")
                 file_path = os.path.join(ata_dir, filename)
-                
+
                 if os.path.exists(file_path):
                     os.remove(file_path)
                     self.refresh_ata_files_list()
@@ -1587,6 +1779,72 @@ class MicrophoneTranscriberGUI:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open ATA folder: {e}")
 
+    # Language Selection Event Handlers (for dedicated language tab)
+    def on_language_radio_change(self):
+        """Handle language radio button selection change"""
+        try:
+            # Update status to show pending change
+            selected_lang = self.selected_language_var.get()
+            lang_name = self.translation_manager.get_language_name(selected_lang)
+            self.language_status_label.config(
+                text=f"Selected: {lang_name} - Click 'Apply Changes' to save",
+                fg="orange",
+            )
+        except Exception as e:
+            self.language_status_label.config(text=f"Error: {e}", fg="red")
+
+    def apply_language_change(self):
+        """Apply the selected language change"""
+        try:
+            new_language = self.selected_language_var.get()
+
+            # Update config
+            self.config["language"] = new_language
+            self.save_main_config()
+
+            # Update global translation manager
+            set_global_language(new_language)
+
+            # Update current language display
+            self.current_language_display.config(
+                text=self.translation_manager.get_language_name(new_language)
+            )
+
+            # Show success message
+            self.language_status_label.config(
+                text=t(
+                    "language_changed",
+                    "Language changed successfully! Some changes require restart.",
+                ),
+                fg="green",
+            )
+
+            # Update main status
+            self.status_var.set(
+                t(
+                    "language_changed",
+                    "Language changed successfully! Some changes require restart.",
+                )
+            )
+
+        except Exception as e:
+            self.language_status_label.config(
+                text=f"Error applying language change: {e}", fg="red"
+            )
+
+    def reset_language_selection(self):
+        """Reset language selection to current language"""
+        try:
+            current_language = self.config.get("language", "pt-BR")
+            self.selected_language_var.set(current_language)
+            self.language_status_label.config(
+                text="Selection reset to current language", fg="blue"
+            )
+        except Exception as e:
+            self.language_status_label.config(
+                text=f"Error resetting selection: {e}", fg="red"
+            )
+
     # File Selection Event Handlers
     def on_transcript_file_select(self, event=None):
         """Handle transcript file selection"""
@@ -1613,28 +1871,29 @@ class MicrophoneTranscriberGUI:
                 # Enable file operation buttons
                 self.open_ata_btn.config(state="normal")
                 self.save_ata_as_btn.config(state="normal")
-                
+
                 # Update info label with file details
                 filename = self.ata_files_listbox.get(selection[0])
                 ata_dir = os.path.join(os.path.dirname(__file__), "output", "ata")
                 file_path = os.path.join(ata_dir, filename)
-                
+
                 if os.path.exists(file_path):
                     file_size = os.path.getsize(file_path)
                     mod_time = os.path.getmtime(file_path)
-                    mod_time_str = datetime.datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M:%S")
-                    
+                    mod_time_str = datetime.datetime.fromtimestamp(mod_time).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+
                     self.ata_info_label.config(
                         text=f"File: {filename}\nSize: {file_size} bytes\nModified: {mod_time_str}",
-                        fg="blue"
+                        fg="blue",
                     )
             else:
                 # Disable file operation buttons
                 self.open_ata_btn.config(state="disabled")
                 self.save_ata_as_btn.config(state="disabled")
                 self.ata_info_label.config(
-                    text="Select an ATA file to view information",
-                    fg="gray"
+                    text="Select an ATA file to view information", fg="gray"
                 )
         except Exception as e:
             self.status_var.set(f"Error handling ATA selection: {e}")
@@ -1645,11 +1904,15 @@ class MicrophoneTranscriberGUI:
         try:
             selection = self.transcript_files_listbox.curselection()
             if not selection:
-                messagebox.showwarning("Warning", "Please select a transcript file first")
+                messagebox.showwarning(
+                    "Warning", "Please select a transcript file first"
+                )
                 return
 
             filename = self.transcript_files_listbox.get(selection[0])
-            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            transcript_dir = os.path.join(
+                os.path.dirname(__file__), "output", "transcript"
+            )
             source_path = os.path.join(transcript_dir, filename)
 
             if not os.path.exists(source_path):
@@ -1665,14 +1928,19 @@ class MicrophoneTranscriberGUI:
                     ("Text files", "*.txt"),
                     ("All files", "*.*"),
                 ],
-                initialfilename=filename
+                initialfilename=filename,
             )
 
             if save_path:
                 import shutil
+
                 shutil.copy2(source_path, save_path)
-                self.status_var.set(f"Transcript saved to: {os.path.basename(save_path)}")
-                messagebox.showinfo("Success", f"File saved successfully to:\n{save_path}")
+                self.status_var.set(
+                    f"Transcript saved to: {os.path.basename(save_path)}"
+                )
+                messagebox.showinfo(
+                    "Success", f"File saved successfully to:\n{save_path}"
+                )
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save transcript: {e}")
@@ -1702,14 +1970,17 @@ class MicrophoneTranscriberGUI:
                     ("Text files", "*.txt"),
                     ("All files", "*.*"),
                 ],
-                initialfilename=filename
+                initialfilename=filename,
             )
 
             if save_path:
                 import shutil
+
                 shutil.copy2(source_path, save_path)
                 self.status_var.set(f"ATA saved to: {os.path.basename(save_path)}")
-                messagebox.showinfo("Success", f"File saved successfully to:\n{save_path}")
+                messagebox.showinfo(
+                    "Success", f"File saved successfully to:\n{save_path}"
+                )
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save ATA: {e}")
@@ -1719,11 +1990,15 @@ class MicrophoneTranscriberGUI:
         try:
             selection = self.transcript_files_listbox.curselection()
             if not selection:
-                messagebox.showwarning("Warning", "Please select a transcript file first")
+                messagebox.showwarning(
+                    "Warning", "Please select a transcript file first"
+                )
                 return
 
             filename = self.transcript_files_listbox.get(selection[0])
-            transcript_dir = os.path.join(os.path.dirname(__file__), "output", "transcript")
+            transcript_dir = os.path.join(
+                os.path.dirname(__file__), "output", "transcript"
+            )
             transcript_path = os.path.join(transcript_dir, filename)
 
             if not os.path.exists(transcript_path):
@@ -1732,15 +2007,15 @@ class MicrophoneTranscriberGUI:
 
             # Confirm regeneration
             if not messagebox.askyesno(
-                "Confirm Regeneration", 
-                f"Generate new ATA from '{filename}'?\n\nThis will create a new ATA file."
+                "Confirm Regeneration",
+                f"Generate new ATA from '{filename}'?\n\nThis will create a new ATA file.",
             ):
                 return
 
             # Set the selected file path and generate ATA directly
             self.selected_transcript_path = transcript_path
             self.status_var.set("Generating ATA...")
-            
+
             # Generate ATA directly
             self.generate_ata_from_file()
 
@@ -1796,14 +2071,16 @@ class MicrophoneTranscriberGUI:
             self.root.update_idletasks()
 
             if not self.ollama_service.is_ollama_available():
-                self.status_var.set(t("ollama_service_unavailable", "❌ Ollama service not available"))
+                self.status_var.set(
+                    t("ollama_service_unavailable", "❌ Ollama service not available")
+                )
                 messagebox.showerror(
-                    "Connection Error", 
+                    "Connection Error",
                     f"Cannot connect to Ollama service at {self.ollama_service.base_url}\n\n"
                     "Please check:\n"
                     "1. Ollama is running\n"
                     "2. The URL in config is correct\n"
-                    "3. Network connectivity"
+                    "3. Network connectivity",
                 )
                 return
 
@@ -1833,14 +2110,21 @@ class MicrophoneTranscriberGUI:
                         output_path,
                         self.config.get("language", "pt-BR"),
                     )
-                    
+
                     # Update UI from main thread
-                    self.root.after(0, lambda: self._handle_ata_generation_result(result, output_name, output_path))
-                    
+                    self.root.after(
+                        0,
+                        lambda: self._handle_ata_generation_result(
+                            result, output_name, output_path
+                        ),
+                    )
+
                 except Exception as e:
                     # Handle errors from main thread
                     error_msg = str(e)
-                    self.root.after(0, lambda: self._handle_ata_generation_error(error_msg))
+                    self.root.after(
+                        0, lambda: self._handle_ata_generation_error(error_msg)
+                    )
 
             # Start generation in background thread
             generation_thread = threading.Thread(target=generate_in_thread, daemon=True)
@@ -2485,16 +2769,18 @@ class MicrophoneTranscriberGUI:
         try:
             # Check if microphones are configured
             selected = [idx for var, idx in self.mic_vars if var.get()]
-            
+
             if len(selected) == 2:
                 self.status_var.set("Auto-starting recording...")
                 self.root.update_idletasks()
-                
+
                 # Start recording automatically
                 self.start_realtime_recording()
             else:
-                self.status_var.set(f"Auto-start requires exactly 2 microphones configured. Found: {len(selected)}")
-                
+                self.status_var.set(
+                    f"Auto-start requires exactly 2 microphones configured. Found: {len(selected)}"
+                )
+
         except Exception as e:
             self.status_var.set(f"Auto-start failed: {e}")
 
@@ -3246,66 +3532,60 @@ class MicrophoneTranscriberGUI:
     def open_language_settings(self):
         """Open language settings dialog"""
         from src.translations import get_translation_manager, set_global_language
-        
+
         # Create language settings window
         lang_window = tk.Toplevel(self.root)
         lang_window.title("Language Settings")
         lang_window.geometry("400x300")
         lang_window.resizable(False, False)
-        
+
         # Make window modal
         lang_window.transient(self.root)
         lang_window.grab_set()
-        
+
         # Center the window
         lang_window.geometry(
             "+%d+%d" % (self.root.winfo_rootx() + 100, self.root.winfo_rooty() + 100)
         )
-        
+
         # Get translation manager
         tm = get_translation_manager()
-        
+
         # Title
         title_label = tk.Label(
-            lang_window, 
-            text="🌐 Language Settings", 
-            font=("Arial", 14, "bold")
+            lang_window, text="🌐 Language Settings", font=("Arial", 14, "bold")
         )
         title_label.pack(pady=20)
-        
+
         # Current language display
         current_frame = tk.Frame(lang_window)
         current_frame.pack(pady=10, padx=20, fill=tk.X)
-        
+
         current_label = tk.Label(
-            current_frame, 
-            text="Current Language:", 
-            font=("Arial", 10, "bold")
+            current_frame, text="Current Language:", font=("Arial", 10, "bold")
         )
         current_label.pack(anchor=tk.W)
-        
+
         current_value = tk.Label(
-            current_frame, 
+            current_frame,
             text=tm.get_language_name(self.config.get("language", "pt-BR")),
             font=("Arial", 10),
-            fg="blue"
+            fg="blue",
         )
         current_value.pack(anchor=tk.W, pady=(5, 0))
-        
+
         # Language selection
         select_frame = tk.Frame(lang_window)
         select_frame.pack(pady=20, padx=20, fill=tk.X)
-        
+
         select_label = tk.Label(
-            select_frame, 
-            text="Select Language:", 
-            font=("Arial", 10, "bold")
+            select_frame, text="Select Language:", font=("Arial", 10, "bold")
         )
         select_label.pack(anchor=tk.W)
-        
+
         # Language variable
         selected_language = tk.StringVar(value=self.config.get("language", "pt-BR"))
-        
+
         # Create radio buttons for each language
         for lang_code, lang_name in tm.get_available_languages().items():
             radio = tk.Radiobutton(
@@ -3313,14 +3593,14 @@ class MicrophoneTranscriberGUI:
                 text=f"{lang_name} ({lang_code})",
                 variable=selected_language,
                 value=lang_code,
-                font=("Arial", 10)
+                font=("Arial", 10),
             )
             radio.pack(anchor=tk.W, pady=2)
-        
+
         # Button frame
         button_frame = tk.Frame(lang_window)
         button_frame.pack(pady=30, padx=20, fill=tk.X)
-        
+
         def save_language():
             """Save the selected language"""
             new_language = selected_language.get()
@@ -3328,30 +3608,30 @@ class MicrophoneTranscriberGUI:
                 # Update config
                 self.config["language"] = new_language
                 self.save_main_config()
-                
+
                 # Update global translation manager
                 set_global_language(new_language)
-                
+
                 # Show success message
                 messagebox.showinfo(
                     "Language Changed",
                     "Language changed successfully! Please restart the application to see all changes.",
-                    parent=lang_window
+                    parent=lang_window,
                 )
-                
+
                 lang_window.destroy()
-                
+
             except Exception as e:
                 messagebox.showerror(
                     "Error",
                     f"Error saving language configuration: {str(e)}",
-                    parent=lang_window
+                    parent=lang_window,
                 )
-        
+
         def cancel_settings():
             """Cancel and close dialog"""
             lang_window.destroy()
-        
+
         # Save button
         save_btn = tk.Button(
             button_frame,
@@ -3361,10 +3641,10 @@ class MicrophoneTranscriberGUI:
             bg="#4CAF50",
             fg="white",
             padx=20,
-            pady=5
+            pady=5,
         )
         save_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
+
         # Cancel button
         cancel_btn = tk.Button(
             button_frame,
@@ -3372,7 +3652,7 @@ class MicrophoneTranscriberGUI:
             command=cancel_settings,
             font=("Arial", 10),
             padx=20,
-            pady=5
+            pady=5,
         )
         cancel_btn.pack(side=tk.LEFT)
 
@@ -3529,28 +3809,42 @@ with focus on continuous, uninterrupted operation.
                         )
                     else:
                         self._safe_update_ollama_status(
-                            t("ollama_downloading", "🌐 Ollama Remote: Downloading model..."), "orange"
+                            t(
+                                "ollama_downloading",
+                                "🌐 Ollama Remote: Downloading model...",
+                            ),
+                            "orange",
                         )
                         # Try to pull the model
                         if not self.is_shutting_down:
                             success = self.ollama_service.pull_model()
                             if not self.is_shutting_down and success:
                                 self._safe_update_ollama_status(
-                                    t("ollama_ready", "🌐 Ollama Remote: Ready"), "green"
+                                    t("ollama_ready", "🌐 Ollama Remote: Ready"),
+                                    "green",
                                 )
                             elif not self.is_shutting_down:
                                 self._safe_update_ollama_status(
-                                    t("ollama_download_failed", "🌐 Ollama Remote: Model download failed"), "red"
+                                    t(
+                                        "ollama_download_failed",
+                                        "🌐 Ollama Remote: Model download failed",
+                                    ),
+                                    "red",
                                 )
                 else:
                     self._safe_update_ollama_status(
-                        t("ollama_unavailable", "🌐 Ollama Remote: Not available"), "red"
+                        t("ollama_unavailable", "🌐 Ollama Remote: Not available"),
+                        "red",
                     )
             except Exception as e:
                 if not self.is_shutting_down:
                     self.ollama_available = False
                     self._safe_update_ollama_status(
-                        t("ollama_connection_error", "🌐 Ollama Remote: Connection Error"), "red"
+                        t(
+                            "ollama_connection_error",
+                            "🌐 Ollama Remote: Connection Error",
+                        ),
+                        "red",
                     )
                     print(f"Ollama check failed: {e}")
 
@@ -3702,7 +3996,9 @@ with focus on continuous, uninterrupted operation.
 
                 # Generate meeting minutes
                 result = self.ollama_service.generate_and_save_minutes(
-                    transcript_file_path, output_file_path, language=self.config.get("language", "pt-BR")
+                    transcript_file_path,
+                    output_file_path,
+                    language=self.config.get("language", "pt-BR"),
                 )
 
                 if result["success"]:
@@ -3776,11 +4072,11 @@ with focus on continuous, uninterrupted operation.
     def toggle_auto_ata_generation(self):
         """Toggle automatic ata generation on/off"""
         self.auto_generate_ata = not self.auto_generate_ata
-        
+
         # Update config and save
         self.config["auto_generate_ata"] = self.auto_generate_ata
         self.save_main_config()
-        
+
         status = "ATIVADA" if self.auto_generate_ata else "DESATIVADA"
         messagebox.showinfo(
             "Geração Automática de Ata",
@@ -3804,7 +4100,9 @@ with focus on continuous, uninterrupted operation.
 
                 # Generate meeting minutes
                 result = self.ollama_service.generate_and_save_minutes(
-                    self.markdown_file_path, output_file_path, language=self.config.get("language", "pt-BR")
+                    self.markdown_file_path,
+                    output_file_path,
+                    language=self.config.get("language", "pt-BR"),
                 )
 
                 if result["success"]:
