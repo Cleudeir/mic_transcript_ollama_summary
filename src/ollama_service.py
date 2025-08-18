@@ -76,6 +76,25 @@ class OllamaService:
             self.logger.error(f"Could not save config: {e}")
             return False
 
+    def _sanitize_model_output(self, content: str) -> str:
+        """Remove any chain-of-thought content up to and including </think>.
+
+        Keeps only the visible answer. If multiple </think> appear, keep content after the last one.
+        Also strips any stray <think> tags if present.
+        """
+        try:
+            if not isinstance(content, str):
+                return content
+            if "</think>" in content:
+                # Keep everything after the last closing tag
+                content = content.rsplit("</think>", 1)[-1]
+            # Remove any leftover opening tags and trim
+            content = content.replace("<think>", "").strip()
+            return content
+        except Exception:
+            # Best-effort: return original if anything goes wrong
+            return content
+
     def update_config(self, ollama_url: str = None, model_name: str = None) -> bool:
         """Update configuration with new values"""
         config = self._load_config()
@@ -219,13 +238,16 @@ class OllamaService:
             )
 
             generated_content = response["message"]["content"]
+            # Hide any chain-of-thought before displaying in UI
+            visible_content = self._sanitize_model_output(generated_content)
 
             return {
                 "success": True,
-                "response": generated_content,
+                "response": visible_content,
                 "model_used": self.model_name,
                 "base_url": self.base_url,
                 "timestamp": datetime.now().isoformat(),
+                "raw_response": generated_content,
             }
 
         except Exception as e:
@@ -278,16 +300,9 @@ class OllamaService:
                 },
             )
 
-            # Extract the generated content
+            # Extract and sanitize the generated content
             generated_content = response["message"]["content"]
-
-            # If the model returned hidden chain-of-thought, drop it
-            if "</think>" in generated_content:
-                try:
-                    generated_content = generated_content.split("</think>", 1)[1]
-                except Exception:
-                    # Best-effort: if split fails for any reason, keep as-is
-                    pass
+            generated_content = self._sanitize_model_output(generated_content)
 
             # Parse the generated minutes
             parsed_minutes = self._parse_generated_minutes(generated_content, language)

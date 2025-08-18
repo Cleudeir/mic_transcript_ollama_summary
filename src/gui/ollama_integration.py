@@ -277,8 +277,9 @@ class OllamaIntegrationMixin:
                     def apply_result():
                         if result.get("success", False):
                             response = result.get("response", "")
+                            # Response already sanitized in service
                             self.status_var.set(
-                                f"✅ Model ready! Response: {response[:30]}..."
+                                f"✅ Model ready! Response: {response[:60]}..."
                             )
                             print(f"Model greeting response: {response}")
                         else:
