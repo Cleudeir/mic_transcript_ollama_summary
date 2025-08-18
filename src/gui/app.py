@@ -192,8 +192,16 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             return
 
         # Resolve mic indices from UI selections; fall back to config
-        mic1_idx = self._parse_mic_option(self.mic1_var.get()) if hasattr(self, "mic1_var") else None
-        mic2_idx = self._parse_mic_option(self.mic2_var.get()) if hasattr(self, "mic2_var") else None
+        mic1_idx = (
+            self._parse_mic_option(self.mic1_var.get())
+            if hasattr(self, "mic1_var")
+            else None
+        )
+        mic2_idx = (
+            self._parse_mic_option(self.mic2_var.get())
+            if hasattr(self, "mic2_var")
+            else None
+        )
 
         if mic1_idx is None or mic2_idx is None:
             mconf = self.config.get("microphones", {})
@@ -205,7 +213,10 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         if len(selected) == 0:
             messagebox.showwarning(
                 t("mic_warning_title", "Microphone Selection"),
-                t("mic_warning_select", "Please select at least one microphone in the Microphone Configuration tab."),
+                t(
+                    "mic_warning_select",
+                    "Please select at least one microphone in the Microphone Configuration tab.",
+                ),
             )
             return
 
@@ -224,16 +235,22 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             if self.is_paused or not self.is_recording:
                 return
             from src.transcribe_text import transcribe_audio_async
+
             text = transcribe_audio_async(audio_chunk, samplerate)
             if text is None or (isinstance(text, str) and text.strip() == ""):
                 return
 
             def ui_update():
-                outs = self.get_output_widgets_for_device(device_index, self._selected_indices)
+                outs = self.get_output_widgets_for_device(
+                    device_index, self._selected_indices
+                )
                 timestamp = datetime.datetime.now().strftime("%H:%M:%S")
                 # Log
                 try:
-                    outs["log"].insert(tk.END, f"[{timestamp}] Device {device_index}: chunk processed\n")
+                    outs["log"].insert(
+                        tk.END,
+                        f"[{timestamp}] Device {device_index}: chunk processed\n",
+                    )
                     outs["log"].see(tk.END)
                 except Exception:
                     pass
@@ -252,6 +269,7 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
 
         # Start capture threads
         from src.capture_audio import capture_audio_realtime
+
         for idx in selected:
             stop_evt = threading.Event()
             self._stop_events[idx] = stop_evt
@@ -1024,9 +1042,7 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
     # --- Additional tabs (Ollama config and Language) ---
     def create_ollama_config_tab(self):
         frame = ttk.Frame(self.notebook)
-        self.notebook.add(
-            frame, text=t("tab_ollama_config", "🤖 Ollama Configuration")
-        )
+        self.notebook.add(frame, text=t("tab_ollama_config", "🤖 Ollama Configuration"))
 
         container = ttk.LabelFrame(frame, text="Ollama Remote Service", padding=10)
         container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -1041,22 +1057,38 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
 
         # Connection status
         self.connection_status_label = tk.Label(container, text="Not tested", fg="gray")
-        self.connection_status_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.connection_status_label.grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(4, 0)
+        )
 
         # Model selection
-        tk.Label(container, text="Model").grid(row=3, column=0, sticky="w", pady=(10, 0))
+        tk.Label(container, text="Model").grid(
+            row=3, column=0, sticky="w", pady=(10, 0)
+        )
         self.model_var = tk.StringVar()
-        self.model_combobox = ttk.Combobox(container, textvariable=self.model_var, values=[], state="readonly", width=57)
+        self.model_combobox = ttk.Combobox(
+            container,
+            textvariable=self.model_var,
+            values=[],
+            state="readonly",
+            width=57,
+        )
         self.model_combobox.grid(row=3, column=1, sticky="we", padx=6, pady=(10, 4))
         self.model_combobox.bind("<<ComboboxSelected>>", self.on_model_change)
-        self.model_status_label = tk.Label(container, text="No model selected", fg="gray")
+        self.model_status_label = tk.Label(
+            container, text="No model selected", fg="gray"
+        )
         self.model_status_label.grid(row=4, column=0, columnspan=2, sticky="w")
 
         # Buttons
         btns = tk.Frame(container)
         btns.grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
-        ttk.Button(btns, text="Test Connection", command=self.test_ollama_connection).pack(side=tk.LEFT)
-        ttk.Button(btns, text="Refresh Models", command=self.refresh_ollama_models).pack(side=tk.LEFT, padx=6)
+        ttk.Button(
+            btns, text="Test Connection", command=self.test_ollama_connection
+        ).pack(side=tk.LEFT)
+        ttk.Button(
+            btns, text="Refresh Models", command=self.refresh_ollama_models
+        ).pack(side=tk.LEFT, padx=6)
 
         for i in range(2):
             container.grid_columnconfigure(i, weight=1)
@@ -1096,7 +1128,9 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
                 self.status_var.set(f"Language change error: {e}")
 
         lang_box.bind("<<ComboboxSelected>>", on_lang_change)
-        ttk.Button(container, text="Apply", command=on_lang_change).grid(row=0, column=2, padx=6)
+        ttk.Button(container, text="Apply", command=on_lang_change).grid(
+            row=0, column=2, padx=6
+        )
         for i in range(3):
             container.grid_columnconfigure(i, weight=0)
 
@@ -1137,6 +1171,3 @@ def run_gui():
 
 if __name__ == "__main__":
     run_gui()
-
-    
-    
