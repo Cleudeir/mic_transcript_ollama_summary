@@ -9,10 +9,11 @@ set DIST_DIR=dist
 
 %PYTHON_EXE% -m pip install pyinstaller
 
-REM Build with onefile and windowed mode
-%PYTHON_EXE% -m PyInstaller --onefile --windowed --icon %ICON_FILE% --name MicrophoneTranscriber %MAIN_SCRIPT%
+REM Build with onefile and windowed mode, include icon.ico as data for runtime window icon
+%PYTHON_EXE% -m PyInstaller --onefile --windowed --icon %ICON_FILE% --add-data "icon.ico;." --name MicrophoneTranscriber %MAIN_SCRIPT%
 
 REM Move .exe to project root for convenience
+if exist MicrophoneTranscriber.exe del /f /q MicrophoneTranscriber.exe
 move %DIST_DIR%\MicrophoneTranscriber.exe .
 
 echo Build complete. Run run_windows.bat to start the app.

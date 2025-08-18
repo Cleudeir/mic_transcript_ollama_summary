@@ -17,6 +17,8 @@ except Exception:
 
 import tkinter as tk
 from tkinter import ttk
+import os
+import sys
 
 # --- Unified Button Component -------------------------------------------------
 
@@ -189,6 +191,24 @@ def create_root(
         root.title(title)
         root.geometry(size)
     except Exception:
+        pass
+
+    # Try to set a window icon from icon.ico (works in dev and PyInstaller bundle)
+    try:
+
+        def _resource_path(rel: str) -> str:
+            try:
+                base_path = getattr(sys, "_MEIPASS")  # type: ignore[attr-defined]
+            except Exception:
+                base_path = os.path.abspath(".")
+            return os.path.join(base_path, rel)
+
+        icon_path = _resource_path("icon.ico")
+        if os.path.exists(icon_path):
+            # iconbitmap expects .ico on Windows; this call is safe to ignore on other OSes
+            root.iconbitmap(icon_path)
+    except Exception:
+        # Non-fatal if icon can't be set
         pass
     return root
 
