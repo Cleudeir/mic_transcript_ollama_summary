@@ -46,8 +46,6 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         self.is_paused = False
         # Microphone variables for selection
         self.mic_vars = []
-        # Create menu bar
-        # self.setup_menu_bar()
 
         # Status bar variable (must be initialized before usage)
         self.status_var = tk.StringVar()
@@ -77,7 +75,7 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
 
         # Recording Control Buttons
         self.create_recording_controls()
-        # Menu bar
+        # Menu bar (requires various command handlers; stubs provided below)
         self.setup_menu_bar()
 
         # Initialize missing components early (before building tabs that rely on them)
@@ -135,6 +133,14 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         )
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
 
+        # Runtime recording state
+        self._stop_events = {}
+        self._capture_threads = {}
+        self._selected_indices = []
+
+        # Ensure Ollama config tab reflects current config
+        self.load_config_tab_values()
+
     # --- The rest of the methods are copied as-is from the original src/gui.py ---
     # UI creation, tabs, configuration, recording pipeline, file ops, ollama integration,
     # language settings, microphone management, etc.
@@ -181,10 +187,91 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
 
     # --- Recording controls and state ---
     def start_recording_button_clicked(self):
+        # Start real-time capture for selected microphones
+        if self.is_recording:
+            return
+
+        # Resolve mic indices from UI selections; fall back to config
+        mic1_idx = self._parse_mic_option(self.mic1_var.get()) if hasattr(self, "mic1_var") else None
+        mic2_idx = self._parse_mic_option(self.mic2_var.get()) if hasattr(self, "mic2_var") else None
+
+        if mic1_idx is None or mic2_idx is None:
+            mconf = self.config.get("microphones", {})
+            mic1_idx = mconf.get("mic1") if mic1_idx is None else mic1_idx
+            mic2_idx = mconf.get("mic2") if mic2_idx is None else mic2_idx
+
+        # Validate
+        selected = [i for i in (mic1_idx, mic2_idx) if isinstance(i, int)]
+        if len(selected) == 0:
+            messagebox.showwarning(
+                t("mic_warning_title", "Microphone Selection"),
+                t("mic_warning_select", "Please select at least one microphone in the Microphone Configuration tab."),
+            )
+            return
+
+        # Save to config for persistence
+        self.config.setdefault("microphones", {})
+        self.config["microphones"]["mic1"] = mic1_idx
+        self.config["microphones"]["mic2"] = mic2_idx
+        self.save_main_config()
+
+        self._selected_indices = selected
+        self._stop_events = {}
+        self._capture_threads = {}
+
+        # Define processing callback
+        def on_audio_chunk(device_index, audio_chunk, samplerate):
+            if self.is_paused or not self.is_recording:
+                return
+            from src.transcribe_text import transcribe_audio_async
+            text = transcribe_audio_async(audio_chunk, samplerate)
+            if text is None or (isinstance(text, str) and text.strip() == ""):
+                return
+
+            def ui_update():
+                outs = self.get_output_widgets_for_device(device_index, self._selected_indices)
+                timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+                # Log
+                try:
+                    outs["log"].insert(tk.END, f"[{timestamp}] Device {device_index}: chunk processed\n")
+                    outs["log"].see(tk.END)
+                except Exception:
+                    pass
+                # Transcript
+                try:
+                    outs["transcript"].insert(tk.END, f"[{timestamp}] {text}\n")
+                    outs["transcript"].see(tk.END)
+                except Exception:
+                    pass
+
+            # Schedule UI update on main thread
+            try:
+                self.root.after(0, ui_update)
+            except Exception:
+                ui_update()
+
+        # Start capture threads
+        from src.capture_audio import capture_audio_realtime
+        for idx in selected:
+            stop_evt = threading.Event()
+            self._stop_events[idx] = stop_evt
+
+            th = threading.Thread(
+                target=capture_audio_realtime,
+                args=(idx, on_audio_chunk, stop_evt),
+                daemon=True,
+                name=f"Capture-{idx}",
+            )
+            self._capture_threads[idx] = th
+            th.start()
+
         self.is_recording = True
         self.is_paused = False
         self.recording_status_label.config(
             text=t("recording_started", "Recording started"), fg="green"
+        )
+        self.status_var.set(
+            f"Recording from: {', '.join(map(str, selected))} (real-time)"
         )
         self.update_recording_controls_state()
 
@@ -201,15 +288,26 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             self.update_recording_controls_state()
 
     def stop_recording_button_clicked(self):
+        # Signal threads to stop
+        try:
+            for evt in self._stop_events.values():
+                evt.set()
+        except Exception:
+            pass
         self.is_recording = False
         self.is_paused = False
         self.recording_status_label.config(
             text=t("recording_stopped", "Recording stopped"), fg="red"
         )
+        self.status_var.set("Recording stopped")
         self.update_recording_controls_state()
 
     def stop_realtime_recording(self):
-        # Placeholder to stop background audio threads/streams
+        try:
+            for evt in self._stop_events.values():
+                evt.set()
+        except Exception:
+            pass
         self.is_recording = False
 
     def update_recording_controls_state(self):
@@ -244,10 +342,354 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         self.notebook.add(
             frame, text=t("tab_mic_config", "🎤 Microphone Configuration")
         )
-        lbl = tk.Label(
-            frame, text="Microphone configuration will be available here.", fg="gray"
+
+        # Container
+        container = ttk.LabelFrame(
+            frame,
+            text=t("mic_config_title", "🎤 Select input microphones"),
+            padding=10,
         )
-        lbl.pack(padx=10, pady=10, anchor="w")
+        container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # State
+        self._mic_devices = []  # list[(idx, name)]
+        self.mic1_var = tk.StringVar()
+        self.mic2_var = tk.StringVar()
+
+        # Row 0 – Refresh and status
+        refresh_btn = ttk.Button(
+            container,
+            text=t("button_refresh", "🔄 Refresh"),
+            command=self.refresh_microphone_list,
+        )
+        refresh_btn.grid(row=0, column=0, sticky="w", pady=(0, 8))
+        self.mic_status_label = tk.Label(container, text="", fg="gray")
+        self.mic_status_label.grid(row=0, column=1, columnspan=2, sticky="w")
+
+        # Row 1 – Mic 1
+        tk.Label(container, text=t("mic1_label", "Microphone 1")).grid(
+            row=1, column=0, sticky="w"
+        )
+        self.mic1_combo = ttk.Combobox(
+            container, textvariable=self.mic1_var, values=[], state="readonly", width=55
+        )
+        self.mic1_combo.grid(row=1, column=1, columnspan=2, sticky="we", padx=5, pady=2)
+
+        # Row 2 – Mic 2
+        tk.Label(container, text=t("mic2_label", "Microphone 2")).grid(
+            row=2, column=0, sticky="w"
+        )
+        self.mic2_combo = ttk.Combobox(
+            container, textvariable=self.mic2_var, values=[], state="readonly", width=55
+        )
+        self.mic2_combo.grid(row=2, column=1, columnspan=2, sticky="we", padx=5, pady=2)
+
+        # Row 3 – Actions
+        actions = tk.Frame(container)
+        actions.grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        save_btn = ttk.Button(
+            actions,
+            text=t("button_save", "💾 Save"),
+            command=self.save_microphone_selection,
+        )
+        save_btn.pack(side=tk.LEFT)
+        test_btn = ttk.Button(
+            actions,
+            text=t("button_test", "🧪 Test"),
+            command=self.test_selected_microphones,
+        )
+        test_btn.pack(side=tk.LEFT, padx=6)
+
+        # Info
+        self.mic_info_label = tk.Label(
+            container,
+            text=t(
+                "mic_info_help",
+                "Pick up to two different input devices. Use Refresh if a new device was plugged in.",
+            ),
+            fg="gray",
+            justify=tk.LEFT,
+            anchor="w",
+        )
+        self.mic_info_label.grid(
+            row=4, column=0, columnspan=3, sticky="we", pady=(10, 0)
+        )
+
+        for i in range(3):
+            container.grid_columnconfigure(i, weight=1)
+
+        # Load existing config & populate
+        self.refresh_microphone_list()
+        self.load_microphone_selection_into_ui()
+
+    # --- Basic File listing/ops used by tabs (minimal implementations) ---
+    def _ensure_output_dir(self):
+        out_dir = os.path.join("src", "output")
+        os.makedirs(out_dir, exist_ok=True)
+        return out_dir
+
+    def refresh_transcript_files_list(self):
+        try:
+            out_dir = self._ensure_output_dir()
+            items = []
+            for name in os.listdir(out_dir):
+                if name.endswith(".md") and not name.endswith("_ata.md"):
+                    items.append(name)
+            self.transcript_files_listbox.delete(0, tk.END)
+            for n in sorted(items):
+                self.transcript_files_listbox.insert(tk.END, n)
+        except Exception as e:
+            self.status_var.set(f"Transcript list error: {e}")
+
+    def on_transcript_file_select(self, event=None):
+        try:
+            sel = self.transcript_files_listbox.curselection()
+            state = tk.NORMAL if sel else tk.DISABLED
+            self.open_transcript_btn.config(state=state)
+            self.save_transcript_as_btn.config(state=state)
+            self.regenerate_ata_btn.config(state=state)
+        except Exception:
+            pass
+
+    def _get_selected_transcript_path(self):
+        out_dir = self._ensure_output_dir()
+        sel = self.transcript_files_listbox.curselection()
+        if not sel:
+            return None
+        name = self.transcript_files_listbox.get(sel[0])
+        return os.path.join(out_dir, name)
+
+    def open_selected_transcript_file(self, event=None):
+        try:
+            path = self._get_selected_transcript_path()
+            if path and os.path.exists(path):
+                os.startfile(path)  # Windows
+        except Exception as e:
+            self.status_var.set(f"Open transcript error: {e}")
+
+    def save_transcript_as(self):
+        try:
+            path = self._get_selected_transcript_path()
+            if not path:
+                return
+            from tkinter import filedialog as _fd
+
+            target = _fd.asksaveasfilename(
+                defaultextension=".md", filetypes=[("Markdown", "*.md")]
+            )
+            if target:
+                with open(path, "r", encoding="utf-8") as fsrc, open(
+                    target, "w", encoding="utf-8"
+                ) as fdst:
+                    fdst.write(fsrc.read())
+        except Exception as e:
+            self.status_var.set(f"Save As error: {e}")
+
+    def regenerate_ata_from_selected(self):
+        # Minimal stub: indicate action; full generation handled elsewhere
+        self.status_var.set("Regenerate ATA: queued (not implemented in minimal stub)")
+
+    def open_transcript_folder(self):
+        try:
+            os.startfile(self._ensure_output_dir())
+        except Exception as e:
+            self.status_var.set(f"Open folder error: {e}")
+
+    def refresh_ata_files_list(self):
+        try:
+            out_dir = self._ensure_output_dir()
+            items = []
+            for name in os.listdir(out_dir):
+                if name.endswith("_ata.md"):
+                    items.append(name)
+            self.ata_files_listbox.delete(0, tk.END)
+            for n in sorted(items):
+                self.ata_files_listbox.insert(tk.END, n)
+        except Exception as e:
+            self.status_var.set(f"ATA list error: {e}")
+
+    def on_ata_file_select(self, event=None):
+        try:
+            sel = self.ata_files_listbox.curselection()
+            state = tk.NORMAL if sel else tk.DISABLED
+            self.open_ata_btn.config(state=state)
+            self.save_ata_as_btn.config(state=state)
+        except Exception:
+            pass
+
+    def _get_selected_ata_path(self):
+        out_dir = self._ensure_output_dir()
+        sel = self.ata_files_listbox.curselection()
+        if not sel:
+            return None
+        name = self.ata_files_listbox.get(sel[0])
+        return os.path.join(out_dir, name)
+
+    def open_selected_ata_file(self, event=None):
+        try:
+            path = self._get_selected_ata_path()
+            if path and os.path.exists(path):
+                os.startfile(path)
+        except Exception as e:
+            self.status_var.set(f"Open ATA error: {e}")
+
+    def save_ata_as(self):
+        try:
+            path = self._get_selected_ata_path()
+            if not path:
+                return
+            from tkinter import filedialog as _fd
+
+            target = _fd.asksaveasfilename(
+                defaultextension=".md", filetypes=[("Markdown", "*.md")]
+            )
+            if target:
+                with open(path, "r", encoding="utf-8") as fsrc, open(
+                    target, "w", encoding="utf-8"
+                ) as fdst:
+                    fdst.write(fsrc.read())
+        except Exception as e:
+            self.status_var.set(f"Save ATA As error: {e}")
+
+    def open_ata_folder(self):
+        try:
+            os.startfile(self._ensure_output_dir())
+        except Exception as e:
+            self.status_var.set(f"Open folder error: {e}")
+
+    # --- Menu command stubs ---
+    def open_language_settings(self):
+        try:
+            # Switch to language tab if exists
+            for i in range(self.notebook.index("end")):
+                if self.notebook.tab(i, "text").endswith("Language"):
+                    self.notebook.select(i)
+                    break
+        except Exception:
+            pass
+
+    def open_audio_settings(self):
+        try:
+            # Switch to mic config tab
+            for i in range(self.notebook.index("end")):
+                if "Microphone" in self.notebook.tab(i, "text"):
+                    self.notebook.select(i)
+                    break
+        except Exception:
+            pass
+
+    def toggle_auto_ata_generation(self):
+        val = bool(self.config.get("auto_generate_ata", True))
+        self.config["auto_generate_ata"] = not val
+        self.save_main_config()
+        self.status_var.set(
+            f"Auto-generate ATA: {'ON' if self.config['auto_generate_ata'] else 'OFF'}"
+        )
+
+    def toggle_performance_monitor(self):
+        # Minimal stub
+        self.status_var.set("Performance monitor: not implemented")
+
+    def view_all_transcripts(self):
+        self.open_transcript_folder()
+
+    def view_all_atas(self):
+        self.open_ata_folder()
+
+    def generate_meeting_minutes_dialog(self):
+        messagebox.showinfo(
+            "Generate ATA",
+            "This minimal build does not include manual ATA generation UI.",
+        )
+
+    # --- Microphone helpers ---
+    def _format_mic_option(self, idx, name):
+        # Avoid commas to simplify split; use pipe as separator
+        return f"{idx} | {name}"
+
+    def _parse_mic_option(self, value):
+        try:
+            # Expected format: "<idx> | <name>"
+            idx_str = value.split("|", 1)[0].strip()
+            return int(idx_str)
+        except Exception:
+            return None
+
+    def refresh_microphone_list(self):
+        from src.capture_audio import get_microphone_list
+
+        try:
+            devices = get_microphone_list()  # list of (idx, name)
+            self._mic_devices = devices
+            options = [self._format_mic_option(i, n) for i, n in devices]
+            self.mic1_combo["values"] = options
+            self.mic2_combo["values"] = options
+            self.mic_status_label.config(
+                text=(
+                    f"{len(devices)} microphone(s) found"
+                    if devices
+                    else "No microphones found"
+                ),
+                fg=("green" if devices else "red"),
+            )
+        except Exception as e:
+            self.mic_status_label.config(text=f"Error: {e}", fg="red")
+
+    def load_microphone_selection_into_ui(self):
+        mconf = self.config.get("microphones", {})
+        mic1 = mconf.get("mic1")
+        mic2 = mconf.get("mic2")
+
+        # Set combo text if still available
+        def set_combo_from_index(combo, idx):
+            if idx is None:
+                return
+            for i, n in self._mic_devices:
+                if i == idx:
+                    combo.set(self._format_mic_option(i, n))
+                    break
+
+        set_combo_from_index(self.mic1_combo, mic1)
+        set_combo_from_index(self.mic2_combo, mic2)
+
+    def save_microphone_selection(self):
+        mic1_idx = self._parse_mic_option(self.mic1_var.get())
+        mic2_idx = self._parse_mic_option(self.mic2_var.get())
+
+        if mic1_idx is not None and mic2_idx is not None and mic1_idx == mic2_idx:
+            messagebox.showwarning(
+                t("mic_warning_title", "Microphone Selection"),
+                t("mic_warning_same", "Please choose two different microphones."),
+            )
+            return
+
+        self.config.setdefault("microphones", {})
+        self.config["microphones"]["mic1"] = mic1_idx
+        self.config["microphones"]["mic2"] = mic2_idx
+        self.save_main_config()
+        self.status_var.set("Microphone selection saved")
+
+    def test_selected_microphones(self):
+        from src.capture_audio import is_microphone_active
+
+        results = []
+        for label, val in (
+            ("Mic1", self.mic1_var.get()),
+            ("Mic2", self.mic2_var.get()),
+        ):
+            idx = self._parse_mic_option(val)
+            if idx is None:
+                results.append(f"{label}: not selected")
+            else:
+                try:
+                    active = is_microphone_active(idx)
+                    results.append(
+                        f"{label}: {'OK' if active else 'No input'} (#{idx})"
+                    )
+                except Exception as e:
+                    results.append(f"{label}: error ({e})")
+
+        self.mic_status_label.config(text=" | ".join(results), fg="blue")
 
     def create_ollama_config_tab(self):
         frame = ttk.Frame(self.notebook)
@@ -570,6 +1012,94 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             "About", "Meeting Audio Transcriber\nRefactored GUI package."
         )
 
+    def show_user_guide(self):
+        messagebox.showinfo("User Guide", "See docs/ for usage instructions.")
+
+    def show_troubleshooting(self):
+        messagebox.showinfo(
+            "Troubleshooting",
+            "If microphones are not listed, click Refresh. If transcription does not start, ensure two different microphones are selected in the Microphone Configuration tab.",
+        )
+
+    # --- Additional tabs (Ollama config and Language) ---
+    def create_ollama_config_tab(self):
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(
+            frame, text=t("tab_ollama_config", "🤖 Ollama Configuration")
+        )
+
+        container = ttk.LabelFrame(frame, text="Ollama Remote Service", padding=10)
+        container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # URL
+        tk.Label(container, text="Base URL").grid(row=0, column=0, sticky="w")
+        self.ollama_url_var = tk.StringVar()
+        url_entry = ttk.Entry(container, textvariable=self.ollama_url_var, width=60)
+        url_entry.grid(row=0, column=1, sticky="we", padx=6, pady=4)
+        self.url_status_label = tk.Label(container, text="", fg="gray")
+        self.url_status_label.grid(row=1, column=0, columnspan=2, sticky="w")
+
+        # Connection status
+        self.connection_status_label = tk.Label(container, text="Not tested", fg="gray")
+        self.connection_status_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
+        # Model selection
+        tk.Label(container, text="Model").grid(row=3, column=0, sticky="w", pady=(10, 0))
+        self.model_var = tk.StringVar()
+        self.model_combobox = ttk.Combobox(container, textvariable=self.model_var, values=[], state="readonly", width=57)
+        self.model_combobox.grid(row=3, column=1, sticky="we", padx=6, pady=(10, 4))
+        self.model_combobox.bind("<<ComboboxSelected>>", self.on_model_change)
+        self.model_status_label = tk.Label(container, text="No model selected", fg="gray")
+        self.model_status_label.grid(row=4, column=0, columnspan=2, sticky="w")
+
+        # Buttons
+        btns = tk.Frame(container)
+        btns.grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Button(btns, text="Test Connection", command=self.test_ollama_connection).pack(side=tk.LEFT)
+        ttk.Button(btns, text="Refresh Models", command=self.refresh_ollama_models).pack(side=tk.LEFT, padx=6)
+
+        for i in range(2):
+            container.grid_columnconfigure(i, weight=1)
+
+        # Track URL changes
+        def _on_url_change(*_):
+            self.on_ollama_url_change()
+
+        self.ollama_url_var.trace_add("write", lambda *_: _on_url_change())
+
+    def create_language_settings_tab(self):
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text=t("tab_language", "🌐 Language"))
+
+        container = ttk.LabelFrame(frame, text="Language Settings", padding=10)
+        container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        tk.Label(container, text="UI Language").grid(row=0, column=0, sticky="w")
+        self.language_var = tk.StringVar(value=self.config.get("language", "pt-BR"))
+        lang_box = ttk.Combobox(
+            container,
+            textvariable=self.language_var,
+            values=["pt-BR", "en-US"],
+            state="readonly",
+            width=20,
+        )
+        lang_box.grid(row=0, column=1, sticky="w", padx=6)
+
+        def on_lang_change(event=None):
+            lang = self.language_var.get()
+            try:
+                set_global_language(lang)
+                self.config["language"] = lang
+                self.save_main_config()
+                self.status_var.set(f"Language set to {lang}")
+            except Exception as e:
+                self.status_var.set(f"Language change error: {e}")
+
+        lang_box.bind("<<ComboboxSelected>>", on_lang_change)
+        ttk.Button(container, text="Apply", command=on_lang_change).grid(row=0, column=2, padx=6)
+        for i in range(3):
+            container.grid_columnconfigure(i, weight=0)
+
     # NOTE: All other methods from the original class should be here.
     # For brevity, they are omitted in this summary refactor stub.
 
@@ -607,3 +1137,6 @@ def run_gui():
 
 if __name__ == "__main__":
     run_gui()
+
+    
+    

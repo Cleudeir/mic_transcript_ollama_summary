@@ -265,18 +265,37 @@ class OllamaIntegrationMixin:
             print(f"Ollama initialization error: {e}")
 
     def send_greeting_to_model(self):
+        """Send a greeting to the model in background without blocking UI"""
         try:
-            self.status_var.set("Testing model with greeting...")
+            self.status_var.set("Testing model with greeting (background)...")
             self.root.update_idletasks()
-            result = self.ollama_service.test_model_with_hello()
-            if result.get("success", False):
-                response = result.get("response", "")
-                self.status_var.set(f"✅ Model ready! Response: {response[:30]}...")
-                print(f"Model greeting response: {response}")
-            else:
-                error = result.get("error", "Unknown error")
-                self.status_var.set(f"Model test failed: {error[:40]}...")
-                print(f"Model greeting error: {error}")
+
+            def worker():
+                try:
+                    result = self.ollama_service.test_model_with_hello()
+
+                    def apply_result():
+                        if result.get("success", False):
+                            response = result.get("response", "")
+                            self.status_var.set(
+                                f"✅ Model ready! Response: {response[:30]}..."
+                            )
+                            print(f"Model greeting response: {response}")
+                        else:
+                            error = result.get("error", "Unknown error")
+                            self.status_var.set(f"Model test failed: {error[:40]}...")
+                            print(f"Model greeting error: {error}")
+
+                    self.root.after(0, apply_result)
+                except Exception as e:
+
+                    def apply_error():
+                        self.status_var.set(f"Model test error: {str(e)[:40]}...")
+                        print(f"Model greeting error: {e}")
+
+                    self.root.after(0, apply_error)
+
+            threading.Thread(target=worker, daemon=True, name="OllamaGreeting").start()
         except Exception as e:
             self.status_var.set(f"Model test error: {str(e)[:40]}...")
-            print(f"Model greeting error: {e}")
+            print(f"Model greeting error (setup): {e}")

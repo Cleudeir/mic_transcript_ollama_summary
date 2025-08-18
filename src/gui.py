@@ -710,6 +710,16 @@ class MicrophoneTranscriberGUI:
         self.mic_frame = tk.Frame(mic_section)
         self.mic_frame.pack(fill=tk.X, pady=5)
 
+        # Selection status label
+        self.mic_selection_status = tk.Label(
+            mic_section,
+            text="No microphones selected",
+            font=("Arial", 9),
+            fg="gray",
+            justify=tk.LEFT,
+        )
+        self.mic_selection_status.pack(anchor=tk.W, pady=(5, 0))
+
         # Refresh microphones button
         refresh_mic_btn = tk.Button(
             mic_section,
@@ -719,6 +729,16 @@ class MicrophoneTranscriberGUI:
             relief="groove",
         )
         refresh_mic_btn.pack(anchor=tk.W, pady=5)
+
+        # Load saved config button
+        load_config_btn = tk.Button(
+            mic_section,
+            text="📂 Load Saved Config",
+            command=self.load_mic_preferences,
+            bg="#e8f5e8",
+            relief="groove",
+        )
+        load_config_btn.pack(anchor=tk.W, pady=2)
 
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
@@ -1136,15 +1156,20 @@ class MicrophoneTranscriberGUI:
 
             # Update status
             if len(selected_with_names) == 2:
-                self.status_var.set(
-                    f"Selected: {selected_with_names[0][1][:20]}... & {selected_with_names[1][1][:20]}..."
-                )
+                status_text = f"✓ Selected: Device {selected_with_names[0][0]} & Device {selected_with_names[1][0]} - Ready to record!"
+                self.status_var.set(status_text)
+                if hasattr(self, "mic_selection_status"):
+                    self.mic_selection_status.config(text=status_text, fg="green")
             elif len(selected_with_names) == 1:
-                self.status_var.set(
-                    f"Selected: {selected_with_names[0][1][:30]}... (select 1 more)"
-                )
+                status_text = f"Selected: Device {selected_with_names[0][0]} ({selected_with_names[0][1][:30]}...) - Select 1 more"
+                self.status_var.set(status_text)
+                if hasattr(self, "mic_selection_status"):
+                    self.mic_selection_status.config(text=status_text, fg="orange")
             else:
-                self.status_var.set("Select exactly 2 microphones to start recording")
+                status_text = "Select exactly 2 microphones to start recording"
+                self.status_var.set(status_text)
+                if hasattr(self, "mic_selection_status"):
+                    self.mic_selection_status.config(text=status_text, fg="gray")
 
         except Exception as e:
             self.status_var.set(f"Error updating microphone selection: {e}")
@@ -1380,26 +1405,42 @@ class MicrophoneTranscriberGUI:
             print(f"Ollama initialization error: {e}")
 
     def send_greeting_to_model(self):
-        """Send a greeting message to test the model"""
+        """Send a greeting to the model in background without blocking UI"""
         try:
-            self.status_var.set("Testing model with greeting...")
+            self.status_var.set("Testing model with greeting (background)...")
             self.root.update_idletasks()
 
-            # Use the existing test method in OllamaService
-            result = self.ollama_service.test_model_with_hello()
+            def worker():
+                try:
+                    result = self.ollama_service.test_model_with_hello()
 
-            if result.get("success", False):
-                response = result.get("response", "")
-                self.status_var.set(f"✅ Model ready! Response: {response[:30]}...")
-                print(f"Model greeting response: {response}")
-            else:
-                error = result.get("error", "Unknown error")
-                self.status_var.set(f"Model test failed: {error[:40]}...")
-                print(f"Model greeting error: {error}")
+                    def apply_result():
+                        if result.get("success", False):
+                            response = result.get("response", "")
+                            self.status_var.set(
+                                f"✅ Model ready! Response: {response[:30]}..."
+                            )
+                            print(f"Model greeting response: {response}")
+                        else:
+                            error = result.get("error", "Unknown error")
+                            self.status_var.set(f"Model test failed: {error[:40]}...")
+                            print(f"Model greeting error: {error}")
 
+                    # Apply UI updates on the main thread
+                    self.root.after(0, apply_result)
+                except Exception as e:
+
+                    def apply_error():
+                        self.status_var.set(f"Model test error: {str(e)[:40]}...")
+                        print(f"Model greeting error: {e}")
+
+                    self.root.after(0, apply_error)
+
+            threading.Thread(target=worker, daemon=True, name="OllamaGreeting").start()
         except Exception as e:
+            # Last-resort error handling
             self.status_var.set(f"Model test error: {str(e)[:40]}...")
-            print(f"Model greeting error: {e}")
+            print(f"Model greeting error (setup): {e}")
 
     def refresh_files_list(self):
         """Refresh the list of generated files"""
@@ -2598,6 +2639,12 @@ class MicrophoneTranscriberGUI:
         if not os.path.exists(old_config_path):
             return
 
+        import os
+        import json
+        import datetime
+        import threading
+        import time
+
         try:
             # Load old mic config
             with open(old_config_path, "r") as f:
@@ -2625,11 +2672,96 @@ class MicrophoneTranscriberGUI:
                 # Remove old config file
                 os.remove(old_config_path)
                 self.status_var.set("Migrated microphone configuration to config.json")
-
         except Exception as e:
             self.status_var.set(f"Error migrating mic config: {e}")
 
     def load_mic_preferences(self):
+        pass
+
+    def test_live_listing_and_transcript(self):
+        """Test live audio capture and transcription for selected microphones."""
+        import threading
+        import time
+
+        selected = [idx for var, idx in self.mic_vars if var.get()]
+        if len(selected) != 2:
+            messagebox.showerror(
+                "Selection Error", "Please select exactly two microphones for the test."
+            )
+            return
+
+        self.clear_all_output()
+        self.status_var.set("Test: Listening for sounds... Speak into each mic.")
+
+        test_duration = 8  # seconds
+
+        def run_test(device_index, selected_indices):
+            stop_event = threading.Event()
+            start_time = time.time()
+
+            def on_audio_chunk(device_idx, audio_data, samplerate):
+                self.transcribe_and_display_separated(
+                    device_idx, audio_data, samplerate, selected_indices
+                )
+
+            from src.capture_audio import capture_audio_realtime
+
+            capture_audio_realtime(
+                device_index, on_audio_chunk, stop_event, chunk_duration=1.0
+            )
+
+            while time.time() - start_time < test_duration:
+                time.sleep(0.2)
+            stop_event.set()
+
+        for device_index in selected:
+            threading.Thread(
+                target=run_test, args=(device_index, selected), daemon=True
+            ).start()
+
+        self.status_var.set("Test running: Watch logs and transcripts for activity.")
+        import threading
+        import time
+
+        selected = [idx for var, idx in self.mic_vars if var.get()]
+        if len(selected) != 2:
+            messagebox.showerror(
+                "Selection Error", "Please select exactly two microphones for the test."
+            )
+            return
+
+        self.clear_all_output()
+        self.status_var.set("Test: Listening for sounds... Speak into each mic.")
+
+        test_duration = 8  # seconds
+
+        def run_test(device_index, selected_indices):
+            stop_event = threading.Event()
+            start_time = time.time()
+
+            def on_audio_chunk(device_idx, audio_data, samplerate):
+                self.transcribe_and_display_separated(
+                    device_idx, audio_data, samplerate, selected_indices
+                )
+
+            from src.capture_audio import capture_audio_realtime
+
+            capture_audio_realtime(
+                device_index, on_audio_chunk, stop_event, chunk_duration=1.0
+            )
+
+            while time.time() - start_time < test_duration:
+                time.sleep(0.2)
+            stop_event.set()
+
+        for device_index in selected:
+            threading.Thread(
+                target=run_test, args=(device_index, selected), daemon=True
+            ).start()
+
+        self.status_var.set("Test running: Watch logs and transcripts for activity.")
+
+        self.status_var.set("Test running: Watch logs and transcripts for activity.")
         """Load previously saved microphone preferences from unified config.json"""
         if not os.path.exists(self.config_file):
             return
@@ -2638,16 +2770,29 @@ class MicrophoneTranscriberGUI:
             with open(self.config_file, "r") as f:
                 config = json.load(f)
 
-            # Load from unified config structure
+            # Load from unified config structure - check both old and new formats
             microphone_config = config.get("microphones", {})
-            saved_mics = microphone_config.get("saved_microphones", [])
 
-            if len(saved_mics) == 2:
-                # Try to select the saved microphones
-                saved_indices = [mic["index"] for mic in saved_mics]
+            # Try new format first (mic1/mic2)
+            mic1_idx = microphone_config.get("mic1")
+            mic2_idx = microphone_config.get("mic2")
+
+            if mic1_idx is not None and mic2_idx is not None:
+                # Use new format
+                saved_indices = [mic1_idx, mic2_idx]
+                self.auto_select_microphones(saved_indices)
+                self.status_var.set(
+                    f"Loaded mic preferences: Device {mic1_idx} & Device {mic2_idx}"
+                )
+                return
+
+            # Fall back to old format
+            saved_mics = microphone_config.get("saved_microphones", [])
+            if len(saved_mics) >= 2:
+                saved_indices = [mic["index"] for mic in saved_mics[:2]]
                 self.auto_select_microphones(saved_indices)
 
-                mic_names = [mic["name"] for mic in saved_mics]
+                mic_names = [mic["name"] for mic in saved_mics[:2]]
                 self.status_var.set(
                     f"Loaded preferences: {mic_names[0][:20]}... & {mic_names[1][:20]}..."
                 )
@@ -2657,11 +2802,24 @@ class MicrophoneTranscriberGUI:
 
     def auto_select_microphones(self, indices):
         """Automatically select microphones by their indices"""
-        for var, idx in self.mic_vars:
-            if idx in indices:
-                var.set(1)
-            else:
-                var.set(0)
+        try:
+            selected_count = 0
+            for var, idx in self.mic_vars:
+                if idx in indices:
+                    var.set(1)
+                    selected_count += 1
+                else:
+                    var.set(0)
+
+            # Update status to show selection
+            if selected_count > 0:
+                self.status_var.set(
+                    f"Auto-selected {selected_count} microphone(s) from saved config"
+                )
+                # Trigger the selection change handler to update UI
+                self.on_microphone_selection_change()
+        except Exception as e:
+            self.status_var.set(f"Error auto-selecting microphones: {e}")
 
     def setup_output_mapping(self):
         """Set up the mapping between device indices and output text widgets"""
@@ -2675,34 +2833,52 @@ class MicrophoneTranscriberGUI:
 
     def get_output_widgets_for_device(self, device_index, selected_indices):
         """Get the appropriate output widgets for a device"""
-        # Determine if this is mic1 or mic2 based on selection order
-        mic_position = "mic1" if device_index == selected_indices[0] else "mic2"
-
-        return {
-            "log": self.output_widgets[f"{mic_position}_log"],
-            "transcript": self.output_widgets[f"{mic_position}_transcript"],
-        }
+        # Defensive: handle empty/short selections
+        try:
+            if not selected_indices:
+                mic_position = "mic1"
+            elif device_index == selected_indices[0]:
+                mic_position = "mic1"
+            else:
+                mic_position = "mic2"
+            return {
+                "log": self.output_widgets[f"{mic_position}_log"],
+                "transcript": self.output_widgets[f"{mic_position}_transcript"],
+            }
+        except Exception:
+            # Fallback to mic1 widgets if anything goes wrong
+            return {
+                "log": self.output_widgets.get("mic1_log", None),
+                "transcript": self.output_widgets.get("mic1_transcript", None),
+            }
 
     def add_log_message(self, device_index, message, selected_indices):
         """Add a log message to the appropriate widgets"""
         widgets = self.get_output_widgets_for_device(device_index, selected_indices)
+        if not widgets or not widgets.get("log"):
+            return
 
-        # Add timestamp
+        # Build message with timestamp
         import datetime
 
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         log_message = f"[{timestamp}] {message}\n"
 
-        # Add to device-specific log
-        widgets["log"].insert(tk.END, log_message)
-        widgets["log"].see(tk.END)
+        def do_insert():
+            try:
+                widgets["log"].insert(tk.END, log_message)
+                widgets["log"].see(tk.END)
+            except Exception:
+                pass
 
-        # Update UI
-        self.root.update()
+        # Ensure UI update on main thread
+        self.root.after(0, do_insert)
 
     def add_transcript_message(self, device_index, transcript, selected_indices):
         """Add a transcript message to the appropriate widgets"""
         widgets = self.get_output_widgets_for_device(device_index, selected_indices)
+        if not widgets or not widgets.get("transcript"):
+            return
 
         # Add timestamp
         import datetime
@@ -2710,15 +2886,21 @@ class MicrophoneTranscriberGUI:
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         transcript_message = f"[{timestamp}] {transcript}\n"
 
-        # Add to device-specific transcript area
-        widgets["transcript"].insert(tk.END, transcript_message)
-        widgets["transcript"].see(tk.END)
+        def do_insert():
+            try:
+                widgets["transcript"].insert(tk.END, transcript_message)
+                widgets["transcript"].see(tk.END)
+            except Exception:
+                pass
 
-        # Save to real-time markdown file
-        self.append_to_realtime_markdown(device_index, transcript, selected_indices)
+        # Save to real-time markdown file (safe to call immediately)
+        try:
+            self.append_to_realtime_markdown(device_index, transcript, selected_indices)
+        except Exception:
+            pass
 
-        # Update UI
-        self.root.update()
+        # Ensure UI update on main thread
+        self.root.after(0, do_insert)
 
     def load_microphones(self):
         """Load and display available microphones"""
@@ -2756,7 +2938,11 @@ class MicrophoneTranscriberGUI:
             # Load saved preferences
             self.load_mic_preferences()
 
-            self.status_var.set(f"Found {len(self.mics)} microphone(s)")
+            # Debug: Show final mic_vars state
+            selected_debug = [idx for var, idx in self.mic_vars if var.get()]
+            self.status_var.set(
+                f"Found {len(self.mics)} microphone(s), {len(selected_debug)} selected: {selected_debug}"
+            )
 
         except Exception as e:
             error_label = tk.Label(
@@ -2839,6 +3025,11 @@ class MicrophoneTranscriberGUI:
             # Check if microphones are configured
             selected = [idx for var, idx in self.mic_vars if var.get()]
 
+            # If no mics selected but we have saved config, try to load them
+            if len(selected) == 0 and len(self.mic_vars) > 0:
+                self.load_mic_preferences()
+                selected = [idx for var, idx in self.mic_vars if var.get()]
+
             if len(selected) == 2:
                 self.status_var.set("Auto-starting recording...")
                 self.root.update_idletasks()
@@ -2847,7 +3038,7 @@ class MicrophoneTranscriberGUI:
                 self.start_realtime_recording()
             else:
                 self.status_var.set(
-                    f"Auto-start requires exactly 2 microphones configured. Found: {len(selected)}"
+                    f"Auto-start requires exactly 2 microphones configured. Found: {len(selected)} selected from {len(self.mic_vars)} available"
                 )
 
         except Exception as e:
@@ -2864,12 +3055,17 @@ class MicrophoneTranscriberGUI:
         """Start real-time recording and transcription"""
         selected = [idx for var, idx in self.mic_vars if var.get()]
 
+        # Debug: Show current selection state
+        self.status_var.set(f"DEBUG: Found {len(selected)} selected mics: {selected}")
+
         if len(selected) != 2:
-            messagebox.showerror(
-                "Selection Error",
-                "Please select exactly two microphones.\n"
-                f"You have selected {len(selected)} microphone(s).",
-            )
+            # More detailed error message
+            if len(selected) == 0:
+                error_msg = "No microphones selected. Please go to the Microphone Configuration tab and select exactly two microphones."
+            else:
+                error_msg = f"Please select exactly two microphones.\nYou have selected {len(selected)} microphone(s): {selected}"
+
+            messagebox.showerror("Selection Error", error_msg)
             return
 
         # Start recording immediately without confirmation
@@ -3117,9 +3313,11 @@ class MicrophoneTranscriberGUI:
             selected_indices,
         )
 
-        # Start real-time capture with configured chunks for faster response
-        # Configured overlap ensures no conversation is lost between chunks
-        capture_audio_realtime(device_index, on_audio_chunk, stop_event)
+        # Start real-time capture with small chunk duration for fast first results
+        # Keep transcription timeouts from config; only chunks are smaller
+        capture_audio_realtime(
+            device_index, on_audio_chunk, stop_event, chunk_duration=1.0
+        )
 
         # Signal all transcription workers to shutdown
         for _ in range(num_workers):

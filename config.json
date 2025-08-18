@@ -1,24 +1,26 @@
 {
-    "ollama": {
-        "base_url": "https://api.apps.tec.br/ollama/",
-        "model_name": "deepseek-r1:7b",
-        "temperature": 0.3,
-        "top_p": 0.8,
-        "num_predict": 2048
-    },
-    "microphones": {
-        "saved_microphones": [
-            {
-                "index": 1,
-                "name": "Microphone Array (3- Intel® Sma"
-            },
-            {
-                "index": 2,
-                "name": "Stereo Mix (3- Realtek(R) Audio"
-            }
-        ],
-        "timestamp": "2025-08-11T10:45:15.255758"
-    },
-    "auto_generate_ata": true,
-    "language": "pt-BR"
+  "ollama": {
+    "base_url": "https://api.apps.tec.br/ollama/",
+    "model_name": "gemma3:latest",
+    "temperature": 0.3,
+    "top_p": 0.8,
+    "num_predict": 2048
+  },
+  "microphones": {
+    "saved_microphones": [
+      {
+        "index": 1,
+        "name": "Microphone Array (3- Intel® Sma"
+      },
+      {
+        "index": 2,
+        "name": "Stereo Mix (3- Realtek(R) Audio"
+      }
+    ],
+    "timestamp": "2025-08-11T10:45:15.255758",
+    "mic1": 1,
+    "mic2": 2
+  },
+  "auto_generate_ata": true,
+  "language": "pt-BR"
 }
