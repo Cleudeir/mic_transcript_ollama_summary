@@ -1,4 +1,4 @@
-# MicrophoneTranscriberGUI (src/gui.py) — Module Summary
+# MicrophoneTranscriberGUI (src/gui/app.py) — Module Summary
 
 ## Overview
 
@@ -29,7 +29,7 @@ Helper factory/runner: `create_gui()`, `run_gui()`
   - 🤖 Ollama Configuration: Base URL, connection test, model selection/refresh
   - 🌐 Language Settings: Radio selection, apply/reset, current language display
 
-An optional menu bar exists with Settings/File/Help entries (currently not enabled at init but fully implemented).
+An optional menu bar exists with Settings/File/Help entries and is enabled during init.
 
 ## Recording & transcription pipeline
 

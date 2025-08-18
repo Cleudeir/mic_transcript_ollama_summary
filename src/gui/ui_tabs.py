@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from src.translations import t
+from .theme import create_button
 
 
 class UITabsMixin:
@@ -103,39 +104,30 @@ class UITabsMixin:
         self.recording_status_label.pack(pady=5)
         buttons_frame = tk.Frame(controls_frame)
         buttons_frame.pack()
-        self.start_btn = tk.Button(
+        self.start_btn = create_button(
             buttons_frame,
             text=t("start_button", "🎤 Start"),
             command=self.start_recording_button_clicked,
-            font=("Arial", 12, "bold"),
-            bg="#4CAF50",
-            fg="white",
-            padx=20,
-            pady=10,
+            kind="primary",
+            size="lg",
             state=tk.NORMAL,
         )
         self.start_btn.pack(side=tk.LEFT, padx=5)
-        self.pause_btn = tk.Button(
+        self.pause_btn = create_button(
             buttons_frame,
             text=t("pause_button", "⏸️ Pause"),
             command=self.pause_recording_button_clicked,
-            font=("Arial", 12, "bold"),
-            bg="#FF9800",
-            fg="white",
-            padx=20,
-            pady=10,
+            kind="warning",
+            size="lg",
             state=tk.DISABLED,
         )
         self.pause_btn.pack(side=tk.LEFT, padx=5)
-        self.stop_btn = tk.Button(
+        self.stop_btn = create_button(
             buttons_frame,
             text=t("stop_button", "🎤 Stop"),
             command=self.stop_recording_button_clicked,
-            font=("Arial", 12, "bold"),
-            bg="#F44336",
-            fg="white",
-            padx=20,
-            pady=10,
+            kind="danger",
+            size="lg",
             state=tk.DISABLED,
         )
         self.stop_btn.pack(side=tk.LEFT, padx=5)
@@ -217,54 +209,53 @@ class UITabsMixin:
 
         transcript_buttons_frame = tk.Frame(transcript_section)
         transcript_buttons_frame.pack(fill=tk.X, pady=(10, 0))
-        refresh_transcript_btn = tk.Button(
+        refresh_transcript_btn = create_button(
             transcript_buttons_frame,
             text=t("button_refresh", "🔄 Refresh"),
             command=self.refresh_transcript_files_list,
-            bg="#e3f2fd",
-            relief="groove",
+            kind="info",
+            size="sm",
         )
         refresh_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         self.transcript_file_ops_frame = tk.Frame(transcript_buttons_frame)
         self.transcript_file_ops_frame.pack(side=tk.LEFT, padx=(10, 0))
-        self.open_transcript_btn = tk.Button(
+        self.open_transcript_btn = create_button(
             self.transcript_file_ops_frame,
             text=t("button_open", "📖 Open"),
             command=self.open_selected_transcript_file,
-            bg="#e8f5e8",
-            relief="groove",
+            kind="success",
+            size="sm",
             state="disabled",
         )
         self.open_transcript_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        self.save_transcript_as_btn = tk.Button(
+        self.save_transcript_as_btn = create_button(
             self.transcript_file_ops_frame,
             text=t("button_save_as", "💾 Save As"),
             command=self.save_transcript_as,
-            bg="#fff3e0",
-            relief="groove",
+            kind="warning",
+            size="sm",
             state="disabled",
         )
         self.save_transcript_as_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        self.regenerate_ata_btn = tk.Button(
+        self.regenerate_ata_btn = create_button(
             self.transcript_file_ops_frame,
             text=t("button_regenerate_ata", "🤖 Regenerate ATA"),
             command=self.regenerate_ata_from_selected,
-            bg="#4CAF50",
-            fg="white",
-            relief="groove",
+            kind="primary",
+            size="sm",
             state="disabled",
         )
         self.regenerate_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        open_transcript_folder_btn = tk.Button(
+        open_transcript_folder_btn = create_button(
             transcript_buttons_frame,
             text=t("button_open_folder", "📁 Open Folder"),
             command=self.open_transcript_folder,
-            bg="#fff3e0",
-            relief="groove",
+            kind="secondary",
+            size="sm",
         )
         open_transcript_folder_btn.pack(side=tk.RIGHT)
 
@@ -293,43 +284,43 @@ class UITabsMixin:
 
         ata_buttons_frame = tk.Frame(ata_section)
         ata_buttons_frame.pack(fill=tk.X, pady=(10, 0))
-        refresh_ata_btn = tk.Button(
+        refresh_ata_btn = create_button(
             ata_buttons_frame,
             text=t("button_refresh", "🔄 Refresh"),
             command=self.refresh_ata_files_list,
-            bg="#e3f2fd",
-            relief="groove",
+            kind="info",
+            size="sm",
         )
         refresh_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         self.ata_file_ops_frame = tk.Frame(ata_buttons_frame)
         self.ata_file_ops_frame.pack(side=tk.LEFT, padx=(10, 0))
-        self.open_ata_btn = tk.Button(
+        self.open_ata_btn = create_button(
             self.ata_file_ops_frame,
             text=t("button_open", "📖 Open"),
             command=self.open_selected_ata_file,
-            bg="#e8f5e8",
-            relief="groove",
+            kind="success",
+            size="sm",
             state="disabled",
         )
         self.open_ata_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        self.save_ata_as_btn = tk.Button(
+        self.save_ata_as_btn = create_button(
             self.ata_file_ops_frame,
             text=t("button_save_as", "💾 Save As"),
             command=self.save_ata_as,
-            bg="#fff3e0",
-            relief="groove",
+            kind="warning",
+            size="sm",
             state="disabled",
         )
         self.save_ata_as_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        open_ata_folder_btn = tk.Button(
+        open_ata_folder_btn = create_button(
             ata_buttons_frame,
             text=t("button_open_folder", "📁 Open Folder"),
             command=self.open_ata_folder,
-            bg="#fff3e0",
-            relief="groove",
+            kind="secondary",
+            size="sm",
         )
         open_ata_folder_btn.pack(side=tk.RIGHT)
 

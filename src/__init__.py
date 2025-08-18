@@ -7,6 +7,8 @@ from .capture_audio import (
     capture_audio_with_callback,
     is_microphone_active,
 )
+
+# Re-export from the gui package (modularized GUI)
 from .gui import create_gui, run_gui, MicrophoneTranscriberGUI
 
 __all__ = [

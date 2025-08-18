@@ -7,6 +7,7 @@ import datetime
 from typing import List
 from .ui_tabs import UITabsMixin
 from .ollama_integration import OllamaIntegrationMixin
+from .theme import create_root, style_primary_button, create_select
 from src.capture_audio import (
     get_microphone_list,
     capture_audio_with_callback,
@@ -29,8 +30,8 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
     """Main GUI class for the Microphone Transcriber application"""
 
     def __init__(self):
-        self.root = tk.Tk()
-        self.root.geometry("1000x700")
+        self.root = create_root()
+        # self.root.geometry("1000x700")  # handled by create_root
 
         # Initialize configuration early
         self.config_file = "config.json"
@@ -75,6 +76,12 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
 
         # Recording Control Buttons
         self.create_recording_controls()
+        # After controls are created, try to style primary button
+        try:
+            if hasattr(self, "start_btn"):
+                style_primary_button(self.start_btn)
+        except Exception:
+            pass
         # Menu bar (requires various command handlers; stubs provided below)
         self.setup_menu_bar()
 
@@ -549,8 +556,8 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         tk.Label(container, text=t("mic1_label", "Microphone 1")).grid(
             row=1, column=0, sticky="w"
         )
-        self.mic1_combo = ttk.Combobox(
-            container, textvariable=self.mic1_var, values=[], state="readonly", width=55
+        self.mic1_combo = create_select(
+            container, variable=self.mic1_var, values=[], state="readonly", width=55
         )
         self.mic1_combo.grid(row=1, column=1, columnspan=2, sticky="we", padx=5, pady=2)
 
@@ -558,8 +565,8 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         tk.Label(container, text=t("mic2_label", "Microphone 2")).grid(
             row=2, column=0, sticky="w"
         )
-        self.mic2_combo = ttk.Combobox(
-            container, textvariable=self.mic2_var, values=[], state="readonly", width=55
+        self.mic2_combo = create_select(
+            container, variable=self.mic2_var, values=[], state="readonly", width=55
         )
         self.mic2_combo.grid(row=2, column=1, columnspan=2, sticky="we", padx=5, pady=2)
 
@@ -907,15 +914,15 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             row=2, column=0, sticky="w"
         )
         self.model_var = tk.StringVar()
-        self.model_combobox = ttk.Combobox(
+        self.model_combobox = create_select(
             container,
-            textvariable=self.model_var,
+            variable=self.model_var,
             values=[],
             state="readonly",
             width=47,
+            on_change=self.on_model_change,
         )
         self.model_combobox.grid(row=2, column=1, sticky="we", padx=5)
-        self.model_combobox.bind("<<ComboboxSelected>>", self.on_model_change)
         self.model_status_label = tk.Label(container, text="", fg="gray")
         self.model_status_label.grid(row=2, column=2, sticky="w")
 
@@ -939,9 +946,9 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         lbl.pack(padx=10, pady=(10, 5), anchor="w")
 
         current_lang = tk.StringVar(value=self.config.get("language", "pt-BR"))
-        lang_combo = ttk.Combobox(
+        lang_combo = create_select(
             frame,
-            textvariable=current_lang,
+            variable=current_lang,
             values=list(get_translation_manager().get_available_languages().keys()),
             state="readonly",
         )
@@ -1241,9 +1248,9 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             row=3, column=0, sticky="w", pady=(10, 0)
         )
         self.model_var = tk.StringVar()
-        self.model_combobox = ttk.Combobox(
+        self.model_combobox = create_select(
             container,
-            textvariable=self.model_var,
+            variable=self.model_var,
             values=[],
             state="readonly",
             width=57,
@@ -1283,9 +1290,9 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
 
         tk.Label(container, text="UI Language").grid(row=0, column=0, sticky="w")
         self.language_var = tk.StringVar(value=self.config.get("language", "pt-BR"))
-        lang_box = ttk.Combobox(
+        lang_box = create_select(
             container,
-            textvariable=self.language_var,
+            variable=self.language_var,
             values=["pt-BR", "en-US"],
             state="readonly",
             width=20,

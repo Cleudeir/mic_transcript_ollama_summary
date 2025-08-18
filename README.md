@@ -31,7 +31,7 @@ A Python application for capturing audio from multiple microphones simultaneousl
 
 ## Project Structure
 
-```
+```text
 reuniao/
 ├── main.py                 # Entry point (3 lines!)
 ├── mic_config.json        # Saved microphone preferences (auto-generated)
@@ -41,7 +41,11 @@ reuniao/
 │   ├── __init__.py        # Package initialization
 │   ├── capture_audio.py   # Audio capture functionality
 │   ├── transcribe_text.py # Speech transcription functionality
-│   ├── gui.py             # GUI interface with AI integration
+│   ├── gui/               # Modernized GUI package (modular)
+│   │   ├── app.py         # Main GUI class & runner
+│   │   ├── ui_tabs.py     # Tab creation & layout mixin
+│   │   ├── ollama_integration.py # Ollama config and status mixin
+│   │   └── theme.py       # Optional modern theming helper
 │   ├── ollama_service.py  # AI service for meeting minutes
 │   └── output/            # Generated transcripts and minutes
 └── README.md              # This file
@@ -53,9 +57,9 @@ reuniao/
 
 Simple entry point that imports and runs the GUI application.
 
-### `src/gui.py`
+### `src/gui/app.py`
 
-Contains the main GUI class `MicrophoneTranscriberGUI` with:
+Contains the main GUI class `MicrophoneTranscriberGUI` (modularized) with:
 
 - Enhanced user interface with modern styling
 - Microphone selection with checkboxes
@@ -125,8 +129,8 @@ Contains functions for speech transcription:
 
 Run the main application:
 
-```bash
-python main.py
+```powershell
+python .\main.py
 ```
 
 ### Steps
