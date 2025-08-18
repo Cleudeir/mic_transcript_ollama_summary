@@ -5,7 +5,7 @@ import time
 import queue
 import numpy as np
 import concurrent.futures
-from src.config import (
+from src.config_pkg import (
     SPEECH_RECOGNITION_ENERGY_THRESHOLD,
     SPEECH_RECOGNITION_PAUSE_THRESHOLD,
     SPEECH_RECOGNITION_PHRASE_THRESHOLD,

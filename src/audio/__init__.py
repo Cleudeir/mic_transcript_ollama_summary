@@ -1,7 +1,7 @@
 """Audio package: microphone discovery and capture utilities.
 
-This package provides a clean namespace while re-exporting the existing
-implementations from the legacy modules under ``src.capture_audio``.
+This package exposes a clean namespace for audio operations; implementations
+live in ``src.audio.capture``.
 """
 
 from .capture import (

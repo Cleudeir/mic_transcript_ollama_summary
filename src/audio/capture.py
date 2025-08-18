@@ -3,7 +3,7 @@ import numpy as np
 import threading
 import tkinter as tk
 import time
-from src.config import (
+from src.config_pkg import (
     CHUNK_DURATION,
     OVERLAP_DURATION,
     MICROPHONE_ACTIVITY_THRESHOLD,
