@@ -138,6 +138,10 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         self._capture_threads = {}
         self._selected_indices = []
 
+        # Realtime transcript file state
+        self._file_write_lock = threading.Lock()
+        self._transcript_file_path = None
+
         # Ensure Ollama config tab reflects current config
         self.load_config_tab_values()
 
@@ -230,6 +234,13 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         self._stop_events = {}
         self._capture_threads = {}
 
+        # Prepare real-time transcript file session
+        try:
+            self._start_transcript_file_session()
+        except Exception as e:
+            # Non-fatal: continue recording even if file cannot be created
+            self.status_var.set(f"Transcript file init error: {e}")
+
         # Define processing callback
         def on_audio_chunk(device_index, audio_chunk, samplerate):
             if self.is_paused or not self.is_recording:
@@ -239,6 +250,13 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             text = transcribe_audio_async(audio_chunk, samplerate)
             if text is None or (isinstance(text, str) and text.strip() == ""):
                 return
+
+            # Append to transcript file in real-time (thread-safe)
+            try:
+                self._append_transcript_line(device_index, text)
+            except Exception:
+                # Avoid breaking capture on IO errors
+                pass
 
             def ui_update():
                 outs = self.get_output_widgets_for_device(
@@ -288,9 +306,14 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         self.recording_status_label.config(
             text=t("recording_started", "Recording started"), fg="green"
         )
-        self.status_var.set(
-            f"Recording from: {', '.join(map(str, selected))} (real-time)"
-        )
+        if self._transcript_file_path:
+            self.status_var.set(
+                f"Recording from: {', '.join(map(str, selected))} → Saving to {os.path.basename(self._transcript_file_path)}"
+            )
+        else:
+            self.status_var.set(
+                f"Recording from: {', '.join(map(str, selected))} (real-time)"
+            )
         self.update_recording_controls_state()
 
     def pause_recording_button_clicked(self):
@@ -317,7 +340,17 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         self.recording_status_label.config(
             text=t("recording_stopped", "Recording stopped"), fg="red"
         )
+        # Finalize transcript session and refresh lists
+        try:
+            self._finalize_transcript_session()
+        except Exception:
+            pass
         self.status_var.set("Recording stopped")
+        try:
+            # Give a tiny delay to ensure final writes complete, then refresh UI list
+            self.root.after(250, self.refresh_transcript_files_list)
+        except Exception:
+            pass
         self.update_recording_controls_state()
 
     def stop_realtime_recording(self):
@@ -327,6 +360,10 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         except Exception:
             pass
         self.is_recording = False
+        try:
+            self._finalize_transcript_session()
+        except Exception:
+            pass
 
     def update_recording_controls_state(self):
         if (
@@ -353,6 +390,54 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
     def auto_start_recording(self):
         # No-op for now; could check config flag to auto start
         return
+
+    # --- Realtime transcript saving helpers ---
+    def _start_transcript_file_session(self):
+        """Create a timestamped markdown file for the current session."""
+        # Prefer the structured transcript dir if available
+        try:
+            base_dir = self._get_transcript_dir()
+        except Exception:
+            # Fallback to legacy src/output if helper not yet defined
+            base_dir = os.path.join("src", "output", "transcript")
+        os.makedirs(base_dir, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        fname = f"{ts}_transcript.md"
+        path = os.path.join(base_dir, fname)
+        header_lines = [
+            "# Meeting Transcript",
+            f"- Started: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"- Devices: {', '.join(map(str, getattr(self, '_selected_indices', []) or []))}",
+            "",
+        ]
+        with self._file_write_lock:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(header_lines))
+        self._transcript_file_path = path
+
+    def _append_transcript_line(self, device_index: int, text: str):
+        """Append a single transcript line with timestamp and mic label."""
+        if not self._transcript_file_path:
+            # Lazy-init if needed
+            self._start_transcript_file_session()
+        # Determine mic label based on selection order
+        label = f"Device {device_index}"
+        try:
+            if self._selected_indices:
+                pos = self._selected_indices.index(device_index)
+                label = f"Mic{pos + 1}"
+        except Exception:
+            pass
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        safe_text = (text or "").strip().replace("\r", " ").replace("\n", " ")
+        line = f"- [{ts}] [{label}] {safe_text}\n"
+        with self._file_write_lock:
+            with open(self._transcript_file_path, "a", encoding="utf-8") as f:
+                f.write(line)
+
+    def _finalize_transcript_session(self):
+        """Clear session state. File is already flushed on each write."""
+        self._transcript_file_path = None
 
     # --- Tabs not provided by UITabsMixin ---
     def create_mic_config_tab(self):
