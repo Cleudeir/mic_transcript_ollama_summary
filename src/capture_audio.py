@@ -6,16 +6,8 @@ import time
 from .config import (
     CHUNK_DURATION,
     OVERLAP_DURATION,
-    SILENCE_THRESHOLD,
-    MICROPHONE_TEST_DURATION,
     MICROPHONE_ACTIVITY_THRESHOLD,
     DEFAULT_RECORDING_DURATION,
-    AUDIO_BLOCKSIZE,
-    AUDIO_LATENCY,
-    AUDIO_SLEEP_INTERVAL,
-    ERROR_SLEEP_INTERVAL,
-    get_overlap_samples,
-    get_chunk_samples,
     get_test_samples,
     get_recording_samples,
 )
