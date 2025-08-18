@@ -281,6 +281,14 @@ class OllamaService:
             # Extract the generated content
             generated_content = response["message"]["content"]
 
+            # If the model returned hidden chain-of-thought, drop it
+            if "</think>" in generated_content:
+                try:
+                    generated_content = generated_content.split("</think>", 1)[1]
+                except Exception:
+                    # Best-effort: if split fails for any reason, keep as-is
+                    pass
+
             # Parse the generated minutes
             parsed_minutes = self._parse_generated_minutes(generated_content, language)
 

@@ -356,7 +356,11 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             pass
         # Optionally auto-generate ATA from the last transcript
         try:
-            if (self.config.get("auto_generate_ata", True) and last_path and os.path.exists(last_path)):
+            if (
+                self.config.get("auto_generate_ata", True)
+                and last_path
+                and os.path.exists(last_path)
+            ):
                 self._start_ata_generation(last_path)
         except Exception:
             pass
@@ -473,14 +477,18 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             try:
                 ata_path = self._derive_ata_path(transcript_path)
                 lang = self.config.get("language", "pt-BR")
-                self.status_var.set(f"Generating ATA from {os.path.basename(transcript_path)}...")
+                self.status_var.set(
+                    f"Generating ATA from {os.path.basename(transcript_path)}..."
+                )
                 result = self.ollama_service.generate_and_save_minutes(
                     transcript_path, ata_path, language=lang
                 )
 
                 def _ui_done():
                     if result.get("success") and os.path.exists(ata_path):
-                        self.status_var.set(f"ATA generated: {os.path.basename(ata_path)}")
+                        self.status_var.set(
+                            f"ATA generated: {os.path.basename(ata_path)}"
+                        )
                         try:
                             self.refresh_ata_files_list()
                         except Exception:
@@ -1059,7 +1067,21 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         name = self._get_selected_listbox_item(self.transcript_files_listbox)
         if not name:
             return
-        self.status_var.set("Regenerating ATA... (not yet implemented)")
+        # Resolve transcript path from selection and start ATA generation
+        try:
+            transcript_path = os.path.join(self._get_transcript_dir(), name)
+            if not os.path.exists(transcript_path):
+                messagebox.showerror(
+                    "ATA",
+                    f"Transcript not found: {transcript_path}",
+                )
+                return
+            self._start_ata_generation(transcript_path, open_after=True)
+        except Exception as e:
+            try:
+                self.status_var.set(f"ATA regeneration error: {e}")
+            except Exception:
+                pass
 
     def refresh_ata_files_list(self):
         if not hasattr(self, "ata_files_listbox"):
