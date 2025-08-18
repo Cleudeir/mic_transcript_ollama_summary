@@ -141,6 +141,7 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         # Realtime transcript file state
         self._file_write_lock = threading.Lock()
         self._transcript_file_path = None
+        self._last_transcript_file_path = None
 
         # Ensure Ollama config tab reflects current config
         self.load_config_tab_values()
@@ -340,6 +341,8 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         self.recording_status_label.config(
             text=t("recording_stopped", "Recording stopped"), fg="red"
         )
+        # Capture current transcript path before finalize
+        last_path = getattr(self, "_transcript_file_path", None)
         # Finalize transcript session and refresh lists
         try:
             self._finalize_transcript_session()
@@ -349,6 +352,12 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
         try:
             # Give a tiny delay to ensure final writes complete, then refresh UI list
             self.root.after(250, self.refresh_transcript_files_list)
+        except Exception:
+            pass
+        # Optionally auto-generate ATA from the last transcript
+        try:
+            if (self.config.get("auto_generate_ata", True) and last_path and os.path.exists(last_path)):
+                self._start_ata_generation(last_path)
         except Exception:
             pass
         self.update_recording_controls_state()
@@ -414,6 +423,7 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
             with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(header_lines))
         self._transcript_file_path = path
+        self._last_transcript_file_path = path
 
     def _append_transcript_line(self, device_index: int, text: str):
         """Append a single transcript line with timestamp and mic label."""
@@ -438,6 +448,64 @@ class MicrophoneTranscriberGUI(UITabsMixin, OllamaIntegrationMixin):
     def _finalize_transcript_session(self):
         """Clear session state. File is already flushed on each write."""
         self._transcript_file_path = None
+
+    # --- ATA generation helpers ---
+    def _ensure_ata_dir(self) -> str:
+        try:
+            base = self._get_ata_dir()
+        except Exception:
+            base = os.path.join("src", "output", "ata")
+        os.makedirs(base, exist_ok=True)
+        return base
+
+    def _derive_ata_path(self, transcript_path: str) -> str:
+        ata_dir = self._ensure_ata_dir()
+        name = os.path.basename(transcript_path)
+        if name.endswith("_transcript.md"):
+            name = name.replace("_transcript.md", "_ata.md")
+        else:
+            stem, ext = os.path.splitext(name)
+            name = f"{stem}_ata.md"
+        return os.path.join(ata_dir, name)
+
+    def _start_ata_generation(self, transcript_path: str, open_after: bool = True):
+        def _worker():
+            try:
+                ata_path = self._derive_ata_path(transcript_path)
+                lang = self.config.get("language", "pt-BR")
+                self.status_var.set(f"Generating ATA from {os.path.basename(transcript_path)}...")
+                result = self.ollama_service.generate_and_save_minutes(
+                    transcript_path, ata_path, language=lang
+                )
+
+                def _ui_done():
+                    if result.get("success") and os.path.exists(ata_path):
+                        self.status_var.set(f"ATA generated: {os.path.basename(ata_path)}")
+                        try:
+                            self.refresh_ata_files_list()
+                        except Exception:
+                            pass
+                        if open_after:
+                            try:
+                                os.startfile(ata_path)
+                            except Exception:
+                                messagebox.showinfo("ATA", f"Saved to: {ata_path}")
+                    else:
+                        msg = result.get("error") or "Failed to generate ATA"
+                        messagebox.showerror("ATA", msg)
+
+                try:
+                    self.root.after(0, _ui_done)
+                except Exception:
+                    _ui_done()
+            except Exception as e:
+                try:
+                    self.status_var.set(f"ATA generation error: {e}")
+                except Exception:
+                    pass
+
+        th = threading.Thread(target=_worker, daemon=True, name="Generate-ATA")
+        th.start()
 
     # --- Tabs not provided by UITabsMixin ---
     def create_mic_config_tab(self):
