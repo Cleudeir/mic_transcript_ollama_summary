@@ -106,7 +106,7 @@ Files are viewable and manageable from the GUI (open/delete/generate ATA from tr
 
 ## License
 
-This project is provided as-is for personal and internal use. See repository for details.
+MIT License © 2025 Cleudeir. Permits use, modification, distribution, and private/commercial use, provided that the copyright and permission notice are included in copies or substantial portions of the software. See the `LICENSE` file for full text.
 
 ## Recomendação (Windows): usar "Stereo Mix" como segundo microfone
 
