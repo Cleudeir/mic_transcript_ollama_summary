@@ -1,10 +1,6 @@
-"""Legacy shim: re-export transcription functions from organized package.
+"""Transcription package: speech recognition helpers and pipelines."""
 
-This file remains for backward compatibility during the refactor and delegates
-to the new implementation in src.transcription.core.
-"""
-
-from src.transcription.core import (
+from .core import (
     transcribe_audio,
     transcribe_audio_async,
     transcribe_audio_fast,

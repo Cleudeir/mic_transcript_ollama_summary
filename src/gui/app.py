@@ -13,8 +13,8 @@ from .mixins.microphone_mixin import MicrophoneTabMixin
 from .mixins.files_mixin import FilesMixin
 from .mixins.language_mixin import LanguageMixin
 from .mixins.menu_mixin import MenuActionsMixin
-from src.ollama_service import OllamaService
-from src.translations import get_translation_manager, set_global_language, t
+from src.services import OllamaService
+from src.i18n import get_translation_manager, set_global_language, t
 
 
 class MicrophoneTranscriberGUI(

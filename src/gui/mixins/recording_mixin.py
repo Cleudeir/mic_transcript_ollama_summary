@@ -3,16 +3,18 @@ import os
 import threading
 import tkinter as tk
 
-from src.translations import t
+from src.i18n import t
 
 
 class RecordingMixin:
     """Recording controls, real-time file writing and ATA generation."""
 
     def start_recording_button_clicked(self):
+        """Start continuous recording and transcription threads for selected mics."""
         if self.is_recording:
             return
 
+        # Determine selected microphones
         mic1_idx = (
             self._parse_mic_option(self.mic1_var.get())
             if hasattr(self, "mic1_var")
@@ -29,7 +31,7 @@ class RecordingMixin:
             mic2_idx = mconf.get("mic2") if mic2_idx is None else mic2_idx
 
         selected = [i for i in (mic1_idx, mic2_idx) if isinstance(i, int)]
-        if len(selected) == 0:
+        if not selected:
             from tkinter import messagebox
 
             messagebox.showwarning(
@@ -41,24 +43,28 @@ class RecordingMixin:
             )
             return
 
+        # Persist selection
         self.config.setdefault("microphones", {})
         self.config["microphones"]["mic1"] = mic1_idx
         self.config["microphones"]["mic2"] = mic2_idx
         self.save_main_config()
 
+        # Reset runtime state
         self._selected_indices = selected
         self._stop_events = {}
         self._capture_threads = {}
 
+        # Begin transcript file session
         try:
             self._start_transcript_file_session()
         except Exception as e:
             self.status_var.set(f"Transcript file init error: {e}")
 
+        # Chunk handler used by capture threads
         def on_audio_chunk(device_index, audio_chunk, samplerate):
             if self.is_paused or not self.is_recording:
                 return
-            from src.transcribe_text import transcribe_audio_async
+            from src.transcription import transcribe_audio_async
 
             text = transcribe_audio_async(audio_chunk, samplerate)
             if text is None or (isinstance(text, str) and text.strip() == ""):
@@ -92,7 +98,8 @@ class RecordingMixin:
             except Exception:
                 ui_update()
 
-        from src.capture_audio import capture_audio_realtime
+        # Start capture threads
+        from src.audio import capture_audio_realtime
 
         for idx in selected:
             stop_evt = threading.Event()
@@ -106,6 +113,7 @@ class RecordingMixin:
             self._capture_threads[idx] = th
             th.start()
 
+        # UI state
         self.is_recording = True
         self.is_paused = False
         self.recording_status_label.config(

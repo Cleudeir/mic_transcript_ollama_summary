@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
-from src.translations import t
+from src.i18n import t
 from ..theme import create_select, create_button
+from src.audio import get_microphone_list, is_microphone_active
 
 
 class MicrophoneTabMixin:
@@ -18,8 +19,6 @@ class MicrophoneTabMixin:
             return None
 
     def refresh_microphone_list(self):
-        from src.capture_audio import get_microphone_list
-
         try:
             devices = get_microphone_list()
             self._mic_devices = devices
@@ -60,7 +59,7 @@ class MicrophoneTabMixin:
         mic2_idx = self._parse_mic_option(self.mic2_var.get())
 
         if mic1_idx is not None and mic2_idx is not None and mic1_idx == mic2_idx:
-            from src.translations import t
+            from src.i18n import t
 
             messagebox.showwarning(
                 t("mic_warning_title", "Microphone Selection"),
@@ -78,8 +77,6 @@ class MicrophoneTabMixin:
             pass
 
     def test_selected_microphones(self):
-        from src.capture_audio import is_microphone_active
-
         results = []
         for label, val in (
             ("Mic1", self.mic1_var.get()),

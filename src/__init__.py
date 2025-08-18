@@ -1,7 +1,8 @@
 # Audio processing package for meeting transcription
 __version__ = "1.0.0"
 
-from .capture_audio import (
+# Import directly from the organized audio package
+from .audio import (
     get_microphone_list,
     capture_audio,
     capture_audio_with_callback,

@@ -1,10 +1,10 @@
-"""Legacy shim: audio capture functions are now in src.audio package.
+"""Audio package: microphone discovery and capture utilities.
 
-This module is kept temporarily to preserve backward compatibility. Prefer
-`from src.audio import ...` imports.
+This package provides a clean namespace while re-exporting the existing
+implementations from the legacy modules under ``src.capture_audio``.
 """
 
-from src.audio import (
+from .capture import (
     get_microphone_list,
     capture_audio,
     capture_audio_with_callback,

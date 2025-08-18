@@ -1,6 +1,6 @@
 from tkinter import ttk, messagebox
 import tkinter as tk
-from src.translations import get_translation_manager, set_global_language, t
+from src.i18n import get_translation_manager, set_global_language, t
 
 
 class LanguageMixin:

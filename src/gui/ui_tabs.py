@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-from src.translations import t
+from src.i18n import t
 from .theme import create_button
 
 

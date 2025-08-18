@@ -1,5 +1,5 @@
 from tkinter import messagebox
-from src.translations import t
+from src.i18n import t
 
 
 class MenuActionsMixin:
