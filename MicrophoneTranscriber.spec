@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['main.py'],
+    ['C:\\Users\\cleudeirsilva\\Documents\\reuniao\\main.py'],
     pathex=[],
     binaries=[],
-    datas=[('icon.ico', '.')],
+    datas=[('C:\\Users\\cleudeirsilva\\Documents\\reuniao\\icon.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['icon.ico'],
+    icon=['C:\\Users\\cleudeirsilva\\Documents\\reuniao\\icon.ico'],
 )
