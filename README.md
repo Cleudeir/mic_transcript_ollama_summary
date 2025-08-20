@@ -13,7 +13,7 @@ A desktop app that records audio, transcribes speech in real time, and generates
 ## Project structure (key files)
 
 ```text
-reuniao/
+meet_audio/
 ├── main.py                      # Entry point
 ├── build_windows.bat            # Build one-file EXE (with icon)
 ├── run_windows.bat              # Launch built EXE

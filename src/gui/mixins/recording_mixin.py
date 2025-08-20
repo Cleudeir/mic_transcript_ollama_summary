@@ -215,7 +215,13 @@ class RecordingMixin:
         try:
             base_dir = self._get_transcript_dir()
         except Exception:
-            base_dir = os.path.join("src", "output", "transcript")
+            user_home = os.path.expanduser("~")
+            candidates = [
+                os.path.join(user_home, "Documentos"),
+                os.path.join(user_home, "Documents"),
+            ]
+            user_docs = next((p for p in candidates if os.path.isdir(p)), user_home)
+            base_dir = os.path.join(user_docs, "meet_audio", "transcript")
         os.makedirs(base_dir, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         fname = f"{ts}_transcript.md"
@@ -257,7 +263,13 @@ class RecordingMixin:
         try:
             base = self._get_ata_dir()
         except Exception:
-            base = os.path.join("src", "output", "ata")
+            user_home = os.path.expanduser("~")
+            candidates = [
+                os.path.join(user_home, "Documentos"),
+                os.path.join(user_home, "Documents"),
+            ]
+            user_docs = next((p for p in candidates if os.path.isdir(p)), user_home)
+            base = os.path.join(user_docs, "meet_audio", "ata")
         os.makedirs(base, exist_ok=True)
         return base
 

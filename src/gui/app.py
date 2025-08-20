@@ -277,7 +277,26 @@ def create_gui():
 
 
 def run_gui():
-    """Convenience function to create and run the GUI"""
+    """Convenience function to create and run the GUI
+
+    Ensures Documents/meet_audio/transcript and Documents/meet_audio/ata exist before GUI starts.
+    """
+    # Create user Documents output directories before GUI starts
+    try:
+        user_home = os.path.expanduser("~")
+        candidates = [
+            os.path.join(user_home, "Documentos"),
+            os.path.join(user_home, "Documents"),
+        ]
+        user_docs = next((p for p in candidates if os.path.isdir(p)), user_home)
+        transcript_dir = os.path.join(user_docs, "meet_audio", "transcript")
+        ata_dir = os.path.join(user_docs, "meet_audio", "ata")
+        os.makedirs(transcript_dir, exist_ok=True)
+        os.makedirs(ata_dir, exist_ok=True)
+    except Exception:
+        # Non-fatal: proceed even if directory creation fails
+        pass
+
     gui = create_gui()
     gui.run()
 
