@@ -5,7 +5,7 @@ a = Analysis(
     ['C:\\Users\\cleudeirsilva\\Documents\\reuniao\\main.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\Users\\cleudeirsilva\\Documents\\reuniao\\icon.ico', '.')],
+    datas=[('icon.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

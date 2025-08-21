@@ -1,0 +1,9 @@
+{
+  "language": "pt-BR",
+  "auto_generate_ata": true,
+  "ollama": {},
+  "microphones": {
+    "mic1": 1,
+    "mic2": 2
+  }
+}
